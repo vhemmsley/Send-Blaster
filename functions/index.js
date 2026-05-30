@@ -19,12 +19,20 @@ exports.sendBlaster = onCall(
 
     try {
       const response = await resend.emails.send({
-        from: 'test <team@maulfaq.online>',
+        from: 'Send Blaster <team@maulfaq.online>',
         to: email,
         subject: subject || 'Test Email',
-        html: '<h1>Test quest/h1>',
+        text: 'Test quest',
+        html: `
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <h1 style="font-family: Arial;">Test quest</h1>
+        </td>
+      </tr>
+    </table>
+  `,
       })
-
       console.log('Resend response:', response)
 
       return {
