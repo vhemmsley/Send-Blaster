@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
     <div class="container mx-auto px-4 py-10">
-      <!-- Header -->
+      <!-- HEADER -->
       <div class="max-w-4xl mx-auto text-center mb-10">
         <h1 class="text-5xl font-bold mb-4">Send Blaster</h1>
 
@@ -14,7 +14,7 @@
         <div
           class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl"
         >
-          <!-- DOMAIN DROPDOWN -->
+          <!-- DOMAIN SELECT -->
           <div class="mb-6">
             <label class="block text-sm font-medium text-slate-300 mb-2"> Select Domain </label>
 
@@ -22,9 +22,9 @@
               v-model="selectedDomain"
               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option disabled value="">Select a domain</option>
+              <option disabled value="">Choose domain</option>
 
-              <option v-for="d in domains" :key="d.domain" :value="d">
+              <option v-for="d in domains" :key="d.domain" :value="d.domain">
                 {{ d.domain }} ({{ d.fromEmail }})
               </option>
             </select>
@@ -49,38 +49,73 @@
             <input
               v-model="fromName"
               type="text"
-              placeholder="e.g. Little Pepe Team"
+              placeholder="e.g. little pepe team"
               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <!-- EMAIL INPUT -->
           <div class="mb-4">
-            <label class="text-sm font-medium text-slate-300 mb-2 block"> Email Addresses </label>
+            <div class="flex justify-between items-center mb-2">
+              <label class="text-sm font-medium text-slate-300"> Email Addresses </label>
+
+              <span class="text-sm text-blue-400"> {{ validEmails.length }} Valid Emails </span>
+            </div>
 
             <textarea
               v-model="emailInput"
-              rows="10"
+              rows="12"
               placeholder="Paste emails here..."
               class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 outline-none resize-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
+          <!-- VALIDATION -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-6">
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-semibold">Validation Summary</span>
+
+              <span class="text-sm px-3 py-1 rounded-full bg-blue-500/20 text-blue-400">
+                {{ validEmails.length }} Valid
+              </span>
+            </div>
+
+            <div v-if="invalidEmails.length">
+              <h3 class="text-red-400 text-sm mb-2">Invalid Emails</h3>
+
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="email in invalidEmails"
+                  :key="email"
+                  class="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs"
+                >
+                  {{ email }}
+                </span>
+              </div>
+            </div>
+
+            <div v-else class="text-green-400 text-sm">No invalid emails detected.</div>
+          </div>
+
           <!-- STATS -->
-          <div class="grid md:grid-cols-3 gap-4 mb-6">
+          <div class="grid md:grid-cols-3 gap-4 mb-8">
             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
               <p class="text-slate-400 text-sm">Total</p>
-              <h2 class="text-2xl font-bold">{{ allEmails.length }}</h2>
+              <h2 class="text-2xl font-bold">{{ totalEmails }}</h2>
             </div>
 
             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
               <p class="text-slate-400 text-sm">Valid</p>
-              <h2 class="text-2xl font-bold text-green-400">{{ validEmails.length }}</h2>
+              <h2 class="text-2xl font-bold text-green-400">
+                {{ validEmails.length }}
+              </h2>
             </div>
 
             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
               <p class="text-slate-400 text-sm">Invalid</p>
-              <h2 class="text-2xl font-bold text-red-400">{{ invalidEmails.length }}</h2>
+              <h2 class="text-2xl font-bold text-red-400">
+                {{ invalidEmails.length }}
+              </h2>
             </div>
           </div>
 
@@ -88,9 +123,10 @@
           <button
             @click="submitEmails"
             :disabled="loading || !validEmails.length || !selectedDomain"
-            class="w-full py-4 rounded-xl font-semibold bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700"
+            class="w-full py-4 rounded-xl font-semibold transition-all duration-300 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed"
           >
-            {{ loading ? 'Processing...' : 'Send Emails' }}
+            <span v-if="!loading">Send Emails</span>
+            <span v-else>Processing...</span>
           </button>
         </div>
       </div>
@@ -99,7 +135,7 @@
 </template>
 
 <script>
-import { sendBlaster } from '@/firebase'
+import { sendBlasterFn } from '@/firebase/firebase'
 
 export default {
   data() {
@@ -112,16 +148,15 @@ export default {
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
 
-      // 🔥 HARD CODED DOMAINS (NO FIRESTORE)
       domains: [
         {
           domain: 'maulfaq.online',
-          apiKey: 're_xxx_1',
+          apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
           fromEmail: 'team@maulfaq.online',
         },
         {
           domain: 'eventfarm.ng',
-          apiKey: 're_xxx_2',
+          apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
           fromEmail: 'team@eventfarm.ng',
         },
       ],
@@ -129,6 +164,10 @@ export default {
   },
 
   computed: {
+    selectedDomainObj() {
+      return this.domains.find((d) => d.domain === this.selectedDomain)
+    },
+
     allEmails() {
       return this.emailInput
         .split(/[\n,\s]+/)
@@ -143,10 +182,13 @@ export default {
     invalidEmails() {
       return this.allEmails.filter((e) => !this.emailRegex.test(e))
     },
+
+    totalEmails() {
+      return this.allEmails.length
+    },
   },
 
   methods: {
-    // 🔥 Sentence Case Formatter
     formatFrom(name) {
       return name
         .toLowerCase()
@@ -160,16 +202,20 @@ export default {
       this.loading = true
 
       try {
-        const domainData = this.selectedDomain
+        const d = this.selectedDomainObj
 
-        await sendBlaster({
+        if (!d) {
+          throw new Error('Please select a domain')
+        }
+
+        await sendBlasterFn({
           emails: this.validEmails,
           subject: this.subject,
 
-          // 🔥 CORE CONFIG SENT TO FIRESTORE
-          domain: domainData.domain,
-          apiKey: domainData.apiKey,
-          fromEmail: domainData.fromEmail,
+          domain: d.domain,
+          apiKey: d.apiKey,
+          fromEmail: d.fromEmail,
+
           from: this.formatFrom(this.fromName),
         })
 

