@@ -121,7 +121,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
 </template>
 
 <script>
-import { sendBlaster } from '@/firebase'
+import { sendBlaster } from '@/firebase/firebase'
 
 export default {
   data() {
