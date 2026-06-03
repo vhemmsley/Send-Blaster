@@ -135,7 +135,7 @@
 </template>
 
 <script>
-import { sendBlasterFn } from '@/firebase/firebase'
+import { sendBlaster } from '@/firebase/firebase'
 
 export default {
   data() {
@@ -208,7 +208,7 @@ export default {
           throw new Error('Please select a domain')
         }
 
-        await sendBlasterFn({
+        await sendBlaster({
           emails: this.validEmails,
           subject: this.subject,
 

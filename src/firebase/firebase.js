@@ -14,4 +14,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 const functions = getFunctions(app, 'us-central1')
 
-export const sendBlasterFn = httpsCallable(functions, 'sendBlaster')
+export const sendBlaster = httpsCallable(functions, 'sendBlaster')
