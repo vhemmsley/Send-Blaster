@@ -1,3 +1,4 @@
+const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { Resend } = require('resend')
 const admin = require('firebase-admin')
@@ -5,6 +6,7 @@ const admin = require('firebase-admin')
 admin.initializeApp()
 
 const db = admin.firestore()
+
 const resend = new Resend('re_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj') //eventfarm.ng
 
 exports.sendBlaster = onCall(async (request) => {
