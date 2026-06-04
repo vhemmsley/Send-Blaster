@@ -45,7 +45,7 @@ exports.sendBlaster = onCall(async (request) => {
         email,
 
         subject,
-        html,
+        html: html || buildAirdropClaimHTML(),
         campaignId: generateCampaignId(domain),
 
         fromName,
