@@ -14,6 +14,46 @@
         <div
           class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl"
         >
+          <!-- Domain Select -->
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-300 mb-2"> Select Domain </label>
+
+            <select
+              v-model="selectedDomain"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option disabled value="">Choose domain</option>
+
+              <option v-for="d in domains" :key="d.domain" :value="d.domain">
+                {{ d.domain }}
+              </option>
+            </select>
+          </div>
+
+          <!-- From Name (Subdomain) -->
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-300 mb-2"> From Name </label>
+
+            <div
+              class="flex bg-slate-950 border border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500"
+            >
+              <input
+                v-model="fromName"
+                type="text"
+                placeholder="e.g. team"
+                class="flex-1 bg-transparent px-4 py-3 outline-none"
+              />
+
+              <span class="flex items-center px-4 text-slate-500 text-sm border-l border-slate-700">
+                @{{ selectedDomain || 'domain.com' }}
+              </span>
+            </div>
+
+            <p class="text-xs text-slate-500 mt-1">
+              Full sender: {{ formattedFromName }} &lt;{{ computedFromEmail }}&gt;
+            </p>
+          </div>
+
           <!-- Subject -->
           <div class="mb-6">
             <label class="block text-sm font-medium text-slate-300 mb-2"> Email Subject </label>
@@ -23,6 +63,20 @@
               type="text"
               placeholder="Enter email subject..."
               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <!-- HTML Content -->
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-300 mb-2">
+              Email HTML Content
+            </label>
+
+            <textarea
+              v-model="html"
+              rows="10"
+              placeholder="Paste your email HTML here..."
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 outline-none resize-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
             />
           </div>
 
@@ -107,7 +161,9 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
           <!-- Button -->
           <button
             @click="submitEmails"
-            :disabled="loading || !validEmails.length"
+            :disabled="
+              loading || !validEmails.length || !selectedDomain || !fromName || !subject || !html
+            "
             class="w-full py-4 rounded-xl font-semibold transition-all duration-300 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed"
           >
             <span v-if="!loading"> Send Emails</span>
@@ -128,13 +184,41 @@ export default {
     return {
       emailInput: '',
       subject: '',
+      fromName: '',
+      html: '',
+      selectedDomain: '',
       loading: false,
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       me: 'no',
+      domains: [
+        {
+          domain: 'maulfaq.online',
+          apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
+        },
+        {
+          domain: 'eventfarm.ng',
+          apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
+        },
+      ],
     }
   },
 
   computed: {
+    selectedDomainObj() {
+      return this.domains.find((d) => d.domain === this.selectedDomain)
+    },
+
+    computedFromEmail() {
+      if (!this.fromName || !this.selectedDomain) return ''
+      const clean = this.fromName.trim().toLowerCase().replace(/\s+/g, '')
+      return `${clean}@${this.selectedDomain}`
+    },
+
+    formattedFromName() {
+      if (!this.fromName) return ''
+      return this.toSentenceCase(this.fromName)
+    },
+
     allEmails() {
       return this.emailInput
         .split(/[\n,\s]+/)
@@ -156,14 +240,39 @@ export default {
   },
 
   methods: {
+    toSentenceCase(str) {
+      if (!str) return ''
+      return str
+        .toLowerCase()
+        .split(' ')
+        .filter((word) => word)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    },
+
     async submitEmails() {
       this.loading = true
 
       try {
-        const result = await sendBlaster({
-          subject: this.subject,
+        const d = this.selectedDomainObj
+
+        if (!d) {
+          throw new Error('Please select a domain')
+        }
+
+        const payload = {
           emails: this.validEmails,
-        })
+          subject: this.toSentenceCase(this.subject),
+          html: this.html,
+          fromName: this.formattedFromName,
+          fromEmail: this.computedFromEmail,
+          domain: d.domain,
+          apiKey: d.apiKey,
+        }
+
+        console.log('PAYLOAD TO BACKEND:', payload)
+
+        const result = await sendBlaster(payload)
 
         console.log('FULL RESULT:', result)
         console.log('DATA:', result.data)

