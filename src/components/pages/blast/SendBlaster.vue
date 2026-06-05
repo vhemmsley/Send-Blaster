@@ -199,6 +199,18 @@ export default {
           domain: 'eventfarm.ng',
           apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
         },
+        {
+          domain: 'sendoraio.online',
+          apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m',
+        },
+        {
+          domain: 'coredispatch.online',
+          apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg',
+        },
+        {
+          domain: 'mailnexio.online',
+          apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
+        },
       ],
     }
   },
