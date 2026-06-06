@@ -15,3 +15,5 @@ const app = initializeApp(firebaseConfig)
 const functions = getFunctions(app, 'us-central1')
 
 export const sendBlaster = httpsCallable(functions, 'sendBlaster')
+export const getCampaignStatus = httpsCallable(functions, 'getCampaignStatus')
+export const getCampaigns = httpsCallable(functions, 'getCampaigns')
