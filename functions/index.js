@@ -10,38 +10,33 @@ const admin = require('firebase-admin')
 const DOMAIN_CONFIG = {
   'maulfaq.online': {
     apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
-    notifyEmail: 'deliveryme69@gmial.com',
+    notifyEmail: 'deliveryme69@gmail.com',
   },
   'eventfarm.ng': {
     apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
-    notifyEmail: 'deliveryme69@gmial.com',
+    notifyEmail: 'deliveryme69@gmail.com',
   },
   'sendoraio.online': {
     apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m',
-    notifyEmail: 'deliveryme69@gmial.com',
+    notifyEmail: 'deliveryme69@gmail.com',
   },
   'coredispatch.online': {
     apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg',
-    notifyEmail: 'deliveryme69@gmial.com',
+    notifyEmail: 'deliveryme69@gmail.com',
   },
   'mailnexio.online': {
     apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
-    notifyEmail: 'deliveryme69@gmial.com',
+    notifyEmail: 'deliveryme69@gmail.com',
   },
 }
 
 // Rate limiting configuration
 const CONFIG = {
-  // Worker settings
-  WORKER_1_BATCH_SIZE: 5,
-  WORKER_2_BATCH_SIZE: 5,
-  WORKER_3_BATCH_SIZE: 5,
-  RETRY_BATCH_SIZE: 5,
+  // Worker settings - each worker gets its own batch from the distributor
+  BATCH_SIZE: 5,
 
   // Timing
-  EMAIL_INTERVAL_MS: 3000,
-  BATCH_INTERVAL_MS: 15000,
-  RETRY_INTERVAL_MS: 60000,
+  EMAIL_INTERVAL_MS: 3000, // 3 seconds between each email
 
   // Retry settings
   MAX_RETRIES: 3,
@@ -123,12 +118,10 @@ async function sendCompletionNotification(campaignId, domain, stats) {
 }
 
 // =========================
-// EMAIL SENDER (with rate limiting)
+// EMAIL SENDER
 // =========================
 
-async function sendSingleEmail(doc, resend, domainConfig) {
-  const data = doc.data()
-
+async function sendSingleEmail(data, resend) {
   try {
     const headers = {
       'List-Unsubscribe': `<https://${data.domain}/unsubscribe?email=${encodeURIComponent(data.email)}>`,
@@ -146,51 +139,88 @@ async function sendSingleEmail(doc, resend, domainConfig) {
       headers,
     })
 
-    await doc.ref.update({
-      status: 'sent',
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      attempts: admin.firestore.FieldValue.increment(1),
-      lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-
     console.log(`✅ Sent to ${data.email} [${data.campaignId}]`)
     return { success: true, email: data.email }
   } catch (err) {
-    const attempts = (data.attempts || 0) + 1
-    const shouldRetry = attempts < CONFIG.MAX_RETRIES
-
-    await doc.ref.update({
-      status: shouldRetry ? 'pending_retry' : 'failed',
-      error: err.message,
-      attempts: attempts,
-      lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
-      lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-
-    console.error(
-      `❌ Failed to send to ${data.email}: ${err.message} (attempt ${attempts}/${CONFIG.MAX_RETRIES})`,
-    )
+    console.error(`❌ Failed to send to ${data.email}: ${err.message}`)
     return { success: false, email: data.email, error: err.message }
   }
 }
 
 // =========================
-// WORKER FACTORY
+// DISTRIBUTOR — Pulls from main queue and assigns to worker queues
+// Runs once per minute, distributes to 3 worker queues
 // =========================
 
-async function runWorker(batchSize, workerName, statusFilter = 'pending') {
-  console.log(`🚀 ${workerName} starting...`)
+async function distributeEmails() {
+  console.log('📦 Distributor starting...')
 
   try {
+    // Pull up to 15 pending emails from main queue (no new index needed)
     const snapshot = await db
       .collection('emailQueue')
-      .where('status', '==', statusFilter)
-      .orderBy('createdAt', 'asc')
-      .limit(batchSize)
+      .where('status', '==', 'pending')
+      .limit(15)
       .get()
 
     if (snapshot.empty) {
-      console.log(`⏭️ ${workerName}: No ${statusFilter} emails found`)
+      console.log('⏭️ Distributor: No pending emails')
+      return { distributed: 0 }
+    }
+
+    const docs = snapshot.docs
+    const batch = db.batch()
+    let distributed = 0
+
+    // Split into 3 groups of 5 and assign to worker queues
+    const workerQueues = ['workerQueue1', 'workerQueue2', 'workerQueue3']
+
+    for (let i = 0; i < docs.length; i++) {
+      const doc = docs[i]
+      const data = doc.data()
+      const workerIndex = i % 3
+      const workerQueue = workerQueues[workerIndex]
+
+      // Add to worker queue
+      const workerRef = db.collection(workerQueue).doc()
+      batch.set(workerRef, {
+        ...data,
+        originalDocId: doc.id,
+        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      // Mark original as distributed (not pending anymore)
+      batch.update(doc.ref, {
+        status: 'distributed',
+        distributedAt: admin.firestore.FieldValue.serverTimestamp(),
+        workerQueue: workerQueue,
+      })
+
+      distributed++
+    }
+
+    await batch.commit()
+    console.log(`✅ Distributor: ${distributed} emails distributed to worker queues`)
+    return { distributed }
+  } catch (err) {
+    console.error('❌ Distributor crashed:', err.message)
+    return { distributed: 0, error: err.message }
+  }
+}
+
+// =========================
+// WORKER — Processes its own dedicated queue
+// =========================
+
+async function runWorker(workerQueueName, workerName) {
+  console.log(`🚀 ${workerName} starting...`)
+
+  try {
+    // Pull from this worker's dedicated queue (no index needed - just get first N)
+    const snapshot = await db.collection(workerQueueName).limit(CONFIG.BATCH_SIZE).get()
+
+    if (snapshot.empty) {
+      console.log(`⏭️ ${workerName}: No emails in ${workerQueueName}`)
       return { processed: 0, sent: 0, failed: 0 }
     }
 
@@ -203,20 +233,52 @@ async function runWorker(batchSize, workerName, statusFilter = 'pending') {
 
       if (!domainConfig) {
         console.error(`❌ ${workerName}: No config for domain ${data.domain}`)
-        await doc.ref.update({
-          status: 'failed',
-          error: `No API key configured for domain: ${data.domain}`,
-        })
+        // Update original doc as failed
+        await db
+          .collection('emailQueue')
+          .doc(data.originalDocId)
+          .update({
+            status: 'failed',
+            error: `No API key configured for domain: ${data.domain}`,
+          })
+        await doc.ref.delete()
         failed++
         continue
       }
 
       const resend = new Resend(domainConfig.apiKey)
-      const result = await sendSingleEmail(doc, resend, domainConfig)
+      const result = await sendSingleEmail(data, resend)
 
-      if (result.success) sent++
-      else failed++
+      // Update original document
+      const originalRef = db.collection('emailQueue').doc(data.originalDocId)
 
+      if (result.success) {
+        await originalRef.update({
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          attempts: admin.firestore.FieldValue.increment(1),
+          lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        sent++
+      } else {
+        const originalDoc = await originalRef.get()
+        const currentAttempts = (originalDoc.data()?.attempts || 0) + 1
+        const shouldRetry = currentAttempts < CONFIG.MAX_RETRIES
+
+        await originalRef.update({
+          status: shouldRetry ? 'pending_retry' : 'failed',
+          error: result.error,
+          attempts: currentAttempts,
+          lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+          lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        failed++
+      }
+
+      // Delete from worker queue (done processing)
+      await doc.ref.delete()
+
+      // Rate limiting: 3 second interval between emails
       if (snapshot.docs.indexOf(doc) < snapshot.docs.length - 1) {
         await sleep(CONFIG.EMAIL_INTERVAL_MS)
       }
@@ -231,7 +293,8 @@ async function runWorker(batchSize, workerName, statusFilter = 'pending') {
 }
 
 // =========================
-// RETRY WORKER
+// RETRY WORKER — Handles failed emails
+// Moves pending_retry back to pending for redistribution
 // =========================
 
 async function runRetryWorker() {
@@ -242,12 +305,11 @@ async function runRetryWorker() {
       new Date(Date.now() - CONFIG.RETRY_DELAY_MINUTES * 60 * 1000),
     )
 
+    // Find emails ready for retry (no new index needed)
     const snapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'pending_retry')
-      .where('lastAttempt', '<=', fiveMinutesAgo)
-      .orderBy('lastAttempt', 'asc')
-      .limit(CONFIG.RETRY_BATCH_SIZE)
+      .limit(CONFIG.BATCH_SIZE)
       .get()
 
     if (snapshot.empty) {
@@ -255,33 +317,37 @@ async function runRetryWorker() {
       return { processed: 0, sent: 0, failed: 0 }
     }
 
-    let sent = 0
-    let failed = 0
+    let reset = 0
 
     for (const doc of snapshot.docs) {
       const data = doc.data()
-      const domainConfig = DOMAIN_CONFIG[data.domain]
 
-      if (!domainConfig) continue
+      // Check if enough time has passed since last attempt
+      const lastAttempt = data.lastAttempt?.toDate?.() || new Date(0)
+      const minutesSince = (Date.now() - lastAttempt.getTime()) / (60 * 1000)
 
+      if (minutesSince < CONFIG.RETRY_DELAY_MINUTES) {
+        console.log(
+          `⏳ Retry Worker: Skipping ${data.email} - too soon (${Math.floor(minutesSince)}m ago)`,
+        )
+        continue
+      }
+
+      // Reset to pending so distributor picks it up again
       await doc.ref.update({
         status: 'pending',
         retryCount: admin.firestore.FieldValue.increment(1),
+        resetAt: admin.firestore.FieldValue.serverTimestamp(),
       })
 
-      const resend = new Resend(domainConfig.apiKey)
-      const result = await sendSingleEmail(doc, resend, domainConfig)
-
-      if (result.success) sent++
-      else failed++
-
-      if (snapshot.docs.indexOf(doc) < snapshot.docs.length - 1) {
-        await sleep(CONFIG.EMAIL_INTERVAL_MS)
-      }
+      reset++
+      console.log(
+        `🔄 Retry Worker: Reset ${data.email} to pending (retry ${(data.retryCount || 0) + 1})`,
+      )
     }
 
-    console.log(`✅ Retry Worker complete: ${sent} resent, ${failed} still failed`)
-    return { processed: snapshot.docs.length, sent, failed }
+    console.log(`✅ Retry Worker: ${reset} emails reset to pending for retry`)
+    return { processed: snapshot.docs.length, reset }
   } catch (err) {
     console.error('❌ Retry Worker crashed:', err.message)
     return { processed: 0, sent: 0, failed: 0, error: err.message }
@@ -298,7 +364,7 @@ async function checkCampaignCompletion() {
   try {
     const pendingSnapshot = await db
       .collection('emailQueue')
-      .where('status', 'in', ['pending', 'pending_retry'])
+      .where('status', 'in', ['pending', 'pending_retry', 'distributed'])
       .limit(1)
       .get()
 
@@ -350,7 +416,7 @@ async function checkCampaignCompletion() {
       const campaignPending = await db
         .collection('emailQueue')
         .where('campaignId', '==', campaignId)
-        .where('status', 'in', ['pending', 'pending_retry'])
+        .where('status', 'in', ['pending', 'pending_retry', 'distributed'])
         .limit(1)
         .get()
 
@@ -377,6 +443,7 @@ async function checkCampaignCompletion() {
 // CLOUD FUNCTIONS
 // =========================
 
+// 1. QUEUE EMAILS (Callable from frontend)
 exports.sendBlaster = onCall(
   {
     memory: '512MiB',
@@ -468,6 +535,20 @@ exports.sendBlaster = onCall(
   },
 )
 
+// 2. DISTRIBUTOR — Runs first, assigns emails to worker queues
+exports.emailDistributor = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    memory: '256MiB',
+    timeoutSeconds: 60,
+    maxInstances: 1,
+  },
+  async () => {
+    await distributeEmails()
+  },
+)
+
+// 3. WORKER 1
 exports.emailWorker1 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -476,10 +557,11 @@ exports.emailWorker1 = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    await runWorker(CONFIG.WORKER_1_BATCH_SIZE, 'Worker-1', 'pending')
+    await runWorker('workerQueue1', 'Worker-1')
   },
 )
 
+// 4. WORKER 2 (offset 20s)
 exports.emailWorker2 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -488,11 +570,12 @@ exports.emailWorker2 = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    await sleep(5000)
-    await runWorker(CONFIG.WORKER_2_BATCH_SIZE, 'Worker-2', 'pending')
+    await sleep(20000)
+    await runWorker('workerQueue2', 'Worker-2')
   },
 )
 
+// 5. WORKER 3 (offset 40s)
 exports.emailWorker3 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -501,11 +584,12 @@ exports.emailWorker3 = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    await sleep(10000)
-    await runWorker(CONFIG.WORKER_3_BATCH_SIZE, 'Worker-3', 'pending')
+    await sleep(40000)
+    await runWorker('workerQueue3', 'Worker-3')
   },
 )
 
+// 6. RETRY WORKER
 exports.retryWorker = onSchedule(
   {
     schedule: 'every 5 minutes',
@@ -518,6 +602,7 @@ exports.retryWorker = onSchedule(
   },
 )
 
+// 7. CAMPAIGN COMPLETION NOTIFIER
 exports.campaignCompletionChecker = onSchedule(
   {
     schedule: CONFIG.COMPLETION_CHECK_INTERVAL,
@@ -530,6 +615,7 @@ exports.campaignCompletionChecker = onSchedule(
   },
 )
 
+// 8. GET CAMPAIGN STATUS
 exports.getCampaignStatus = onCall(
   {
     memory: '256MiB',
@@ -551,7 +637,7 @@ exports.getCampaignStatus = onCall(
 
       const stats = await db.collection('emailQueue').where('campaignId', '==', campaignId).get()
 
-      const statusCounts = { pending: 0, sent: 0, failed: 0, pending_retry: 0 }
+      const statusCounts = { pending: 0, sent: 0, failed: 0, pending_retry: 0, distributed: 0 }
       stats.docs.forEach((doc) => {
         const status = doc.data().status
         if (statusCounts[status] !== undefined) {
@@ -578,6 +664,7 @@ exports.getCampaignStatus = onCall(
   },
 )
 
+// 9. GET ALL CAMPAIGNS
 exports.getCampaigns = onCall(
   {
     memory: '256MiB',

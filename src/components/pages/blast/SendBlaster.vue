@@ -388,9 +388,17 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                     </p>
                   </div>
                   <div
-                    class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 text-center"
+                    class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2 text-center"
                   >
-                    <p class="text-xs text-orange-400">Retry</p>
+                    <p class="text-xs text-purple-400">Distributed</p>
+                    <p class="text-lg font-bold text-purple-400">
+                      {{ campaignStats.distributed || 0 }}
+                    </p>
+                  </div>
+                  <div
+                    class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 text-center col-span-2"
+                  >
+                    <p class="text-xs text-orange-400">Retry Queue</p>
                     <p class="text-lg font-bold text-orange-400">
                       {{ campaignStats.pending_retry || 0 }}
                     </p>
@@ -579,7 +587,8 @@ export default {
     estimatedCompletionTime() {
       const pending = this.campaignStats.pending || 0
       const retry = this.campaignStats.pending_retry || 0
-      const totalRemaining = pending + retry
+      const distributed = this.campaignStats.distributed || 0
+      const totalRemaining = pending + retry + distributed
 
       const minutes = Math.ceil(totalRemaining / 12)
 
@@ -631,17 +640,15 @@ export default {
 
         console.log('✅ Campaign queued:', result)
 
-        // Firebase callable wraps response in .data
-        const responseData = result.data || result
-
-        this.currentCampaignId = responseData.campaignId
+        // Firebase callable functions wrap response in result.data
+        const data = result.data || result
+        this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${responseData.queued} emails queued. Sending at ~1000/hour rate. You'll receive a completion email at deliveryme69@gmial.com`
+        this.message = `${data.queued} emails queued. Sending at ~1000/hour rate. You will receive a completion email at deliveryme69@gmial.com`
 
-        if (responseData.campaignId) {
-          this.startPolling(responseData.campaignId)
-        }
+        // Start polling immediately with the new campaign ID
+        this.startPolling(this.currentCampaignId)
         await this.loadRecentCampaigns()
       } catch (error) {
         console.error('❌ Error:', error)
@@ -654,10 +661,18 @@ export default {
     },
 
     startPolling(campaignId) {
+      if (!campaignId) {
+        console.warn('startPolling called without campaignId, skipping')
+        return
+      }
+      this.currentCampaignId = campaignId
       this.stopPolling()
       this.pollCampaignStatus(campaignId)
       this.pollInterval = setInterval(() => {
-        this.pollCampaignStatus(campaignId)
+        // Always use the latest currentCampaignId from instance
+        if (this.currentCampaignId) {
+          this.pollCampaignStatus(this.currentCampaignId)
+        }
       }, 10000)
     },
 
@@ -670,21 +685,29 @@ export default {
 
     async pollCampaignStatus(campaignId) {
       if (!campaignId) {
-        console.warn('pollCampaignStatus: No campaignId provided, skipping poll')
+        console.warn('pollCampaignStatus called without campaignId, skipping')
         return
       }
-
       try {
+        console.log('Polling campaign:', campaignId)
         const result = await getCampaignStatus({ campaignId })
-        const responseData = result.data || result
+        console.log('Poll result:', result)
 
-        this.currentCampaign = responseData.campaign
-        this.campaignStats = responseData.stats
-        this.campaignProgress = responseData.progress
+        // Firebase callable functions wrap response in result.data
+        const data = result.data || result
 
-        if (responseData.progress && responseData.progress.percentage >= 100) {
+        if (!data || !data.campaign) {
+          console.warn('No campaign data in poll result')
+          return
+        }
+
+        this.currentCampaign = data.campaign
+        this.campaignStats = data.stats || {}
+        this.campaignProgress = data.progress || { total: 0, completed: 0, percentage: 0 }
+
+        if (result.progress && result.progress.percentage >= 100) {
           this.stopPolling()
-          if (this.currentCampaign && this.currentCampaign.notificationSent) {
+          if (this.currentCampaign.notificationSent) {
             this.messageType = 'success'
             this.messageTitle = 'Campaign Complete!'
             this.message = `All emails processed. Check deliveryme69@gmial.com for the completion report.`
@@ -692,26 +715,27 @@ export default {
         }
       } catch (err) {
         console.error('Poll error:', err)
-        // Stop polling on persistent errors to avoid log spam
-        if (err.code === 'invalid-argument' || err.code === 'not-found') {
-          this.stopPolling()
-        }
       }
     },
+
     async loadRecentCampaigns() {
       try {
         const result = await getCampaigns()
-        const responseData = result.data || result
-        this.recentCampaigns = responseData.campaigns || []
+        const data = result.data || result
+        this.recentCampaigns = data.campaigns || []
       } catch (err) {
         console.error('Failed to load campaigns:', err)
       }
     },
 
     async loadCampaign(campaignId) {
+      if (!campaignId) {
+        console.warn('loadCampaign called without campaignId, skipping')
+        return
+      }
       this.currentCampaignId = campaignId
-      await this.pollCampaignStatus(campaignId)
-      this.startPolling(campaignId)
+      await this.pollCampaignStatus(this.currentCampaignId)
+      this.startPolling(this.currentCampaignId)
     },
 
     formatDate(timestamp) {
