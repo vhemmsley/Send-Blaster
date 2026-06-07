@@ -149,10 +149,11 @@ async function sendCompletionNotification(campaignId, domain, stats) {
     console.log(
       `✅ Completion notification SENT for campaign ${campaignId}. Resend ID: ${result?.id || 'N/A'}`,
     )
+    return { success: true, id: result?.id }
   } catch (err) {
     console.error(`❌ Failed to send completion notification for ${campaignId}:`, err.message)
     console.error('Full error:', err)
-    throw err // Re-throw so the caller knows it failed
+    return { success: false, error: err.message }
   }
 }
 
@@ -443,7 +444,7 @@ async function checkCampaignCompletion() {
       `📋 Found ${sentSnapshot.size} sent + ${failedSnapshot.size} failed = ${allDocs.length} total recently processed emails`,
     )
 
-    console.log(`📋 Found ${recentSnapshot.size} recently processed emails`)
+    console.log(`📋 Found ${allDocs.length} recently processed emails`)
 
     if (allDocs.length === 0) {
       console.log('ℹ️ No recently completed campaigns found')
@@ -506,36 +507,51 @@ async function checkCampaignCompletion() {
         continue
       }
 
+      // Get campaign document for proper domain and metadata
+      const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
+      const campaignData = campaignDoc.exists ? campaignDoc.data() : {}
+      const domain = campaignData.domain || stats.domain
+
       console.log(`🎯 Campaign ${campaignId} is complete! Stats:`, stats)
 
-      // Mark campaign as completed
-      await db.collection('campaigns').doc(campaignId).set(
-        {
-          status: 'completed',
-          notificationSent: true,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          stats,
-        },
-        { merge: true },
-      )
-
-      console.log(`💾 Campaign ${campaignId} marked as completed in Firestore`)
-
-      // Send completion email
+      // Send completion email FIRST (before marking as completed)
+      let notificationSuccess = false
+      let notificationError = null
       try {
-        await sendCompletionNotification(campaignId, stats.domain, stats)
-        console.log(`📧 Completion notification SENT for campaign ${campaignId}`)
+        const notifyResult = await sendCompletionNotification(campaignId, domain, stats)
+        if (notifyResult.success) {
+          notificationSuccess = true
+          console.log(`📧 Completion notification SENT for campaign ${campaignId}`)
+        } else {
+          notificationError = notifyResult.error
+          console.error(`❌ Notification returned failure for ${campaignId}:`, notifyResult.error)
+        }
       } catch (notifyErr) {
+        notificationError = notifyErr.message
         console.error(`❌ Failed to send notification for ${campaignId}:`, notifyErr.message)
-        // Don't mark as notified if email failed - will retry next run
-        await db.collection('campaigns').doc(campaignId).set(
+      }
+
+      // Mark campaign as completed (only mark notificationSent if email actually succeeded)
+      await db
+        .collection('campaigns')
+        .doc(campaignId)
+        .set(
           {
-            notificationSent: false,
-            notificationError: notifyErr.message,
+            status: 'completed',
+            notificationSent: notificationSuccess,
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            stats,
+            ...(notificationError ? { notificationError } : {}),
+            ...(notificationSuccess
+              ? { notificationError: admin.firestore.FieldValue.delete() }
+              : {}),
           },
           { merge: true },
         )
-      }
+
+      console.log(
+        `💾 Campaign ${campaignId} marked as completed in Firestore (notificationSent: ${notificationSuccess})`,
+      )
     }
   } catch (err) {
     console.error('❌ Campaign completion check failed:', err.message)

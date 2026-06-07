@@ -666,7 +666,7 @@ export default {
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${data.queued} emails queued. Sending at ~1000/hour rate. You will receive a completion email at deliveryme69@gmial.com`
+        this.message = `${data.queued} emails queued. Sending at ~1000/hour rate. You will receive a completion email at deliveryme69@gmail.com`
 
         // Start polling immediately with the new campaign ID
         this.startPolling(this.currentCampaignId)
@@ -731,7 +731,7 @@ export default {
           if (this.currentCampaign.notificationSent) {
             this.messageType = 'success'
             this.messageTitle = 'Campaign Complete!'
-            this.message = `All emails processed. Check deliveryme69@gmial.com for the completion report.`
+            this.message = `All emails processed. Check deliveryme69@gmail.com for the completion report.`
           }
         }
       } catch (err) {
