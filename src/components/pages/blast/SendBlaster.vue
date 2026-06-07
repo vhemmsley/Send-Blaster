@@ -342,7 +342,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                     >Current Campaign</span
                   >
                   <span class="text-xs px-2 py-0.5 rounded-full" :class="campaignStatusClass">
-                    {{ currentCampaign.status }}
+                    {{ displayCampaignStatus }}
                   </span>
                 </div>
                 <p class="font-semibold text-sm truncate">{{ currentCampaign.subject }}</p>
@@ -459,9 +459,9 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                     </div>
                     <span
                       class="text-xs px-2 py-0.5 rounded-full ml-2 shrink-0"
-                      :class="getCampaignStatusClass(campaign.status)"
+                      :class="getCampaignStatusClass(getCampaignDisplayStatus(campaign))"
                     >
-                      {{ campaign.status }}
+                      {{ getCampaignDisplayStatus(campaign) }}
                     </span>
                   </div>
                   <div class="flex gap-3 mt-2 text-xs">
@@ -577,11 +577,26 @@ export default {
     },
 
     campaignStatusClass() {
-      const status = this.currentCampaign?.status
+      const status = this.displayCampaignStatus
+      if (status === 'completed') return 'bg-green-500/20 text-green-400'
       if (status === 'sent') return 'bg-green-500/20 text-green-400'
       if (status === 'failed') return 'bg-red-500/20 text-red-400'
       if (status === 'queued') return 'bg-yellow-500/20 text-yellow-400'
       return 'bg-blue-500/20 text-blue-400'
+    },
+
+    displayCampaignStatus() {
+      if (!this.currentCampaign) return ''
+
+      // Check if campaign is completed based on progress
+      const total = this.campaignProgress?.total || 0
+      const completed = this.campaignProgress?.completed || 0
+
+      if (total > 0 && completed >= total) {
+        return 'completed'
+      }
+
+      return this.currentCampaign.status || 'queued'
     },
 
     estimatedCompletionTime() {
@@ -740,20 +755,57 @@ export default {
 
     formatDate(timestamp) {
       if (!timestamp) return 'Unknown'
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      try {
+        let date
+        // Firestore Timestamp object
+        if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+          date = timestamp.toDate()
+        }
+        // Firestore Timestamp with seconds/nanoseconds
+        else if (timestamp.seconds) {
+          date = new Date(timestamp.seconds * 1000)
+        }
+        // ISO string or number
+        else {
+          date = new Date(timestamp)
+        }
+
+        if (isNaN(date.getTime())) return 'Unknown'
+
+        return date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      } catch (e) {
+        return 'Unknown'
+      }
     },
 
     getCampaignStatusClass(status) {
+      if (status === 'completed') return 'bg-green-500/20 text-green-400'
       if (status === 'sent') return 'bg-green-500/20 text-green-400'
       if (status === 'failed') return 'bg-red-500/20 text-red-400'
       if (status === 'queued') return 'bg-yellow-500/20 text-yellow-400'
       return 'bg-blue-500/20 text-blue-400'
+    },
+
+    getCampaignDisplayStatus(campaign) {
+      if (!campaign) return 'queued'
+
+      // Check if campaign is completed (backend sets these when done)
+      if (campaign.status === 'completed') {
+        return 'completed'
+      }
+      if (campaign.notificationSent === true) {
+        return 'completed'
+      }
+      if (campaign.completedAt) {
+        return 'completed'
+      }
+
+      return campaign.status || 'queued'
     },
   },
 }
