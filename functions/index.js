@@ -9,7 +9,7 @@ const admin = require('firebase-admin')
 
 const DOMAIN_CONFIG = {
   'maulfaq.online': {
-    apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg',
+    apiKey: 're_US6wY6Fy_Hmm5nWSmff88srnPJJSSfhVJ',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'eventfarm.ng': {
@@ -28,6 +28,27 @@ const DOMAIN_CONFIG = {
     apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+  // new config
+  'mailzillapro.online': {
+    apiKey: 're_M5WaWK4X_K5oCrkXhYuJVndKBPvXBMghy',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'hostmailerpro.online': {
+    apiKey: 're_6fQ79DPd_5k3XHyMX3DAw89nFecs35TmE',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'sendmailsx.online': {
+    apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'perfectmailer.online': {
+    apiKey: 're_TEhZoVrf_C3r2rMwnHhzRofFu8GL1riQ8',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'sendermailio.online': {
+    apiKey: 're_FxDaRfAH_6r8u8rpqCLHGgXT6n8MwmJAQ',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
 }
 
 // Rate limiting configuration
@@ -36,17 +57,17 @@ const CONFIG = {
   BATCH_SIZE: 5,
 
   // Timing
-  EMAIL_INTERVAL_MS: 3000, // 3 seconds between each email
+  EMAIL_INTERVAL_MS: 1000, // 1 second between each email (faster)
 
   // Retry settings
   MAX_RETRIES: 3,
   RETRY_DELAY_MINUTES: 5,
 
   // Campaign completion
-  COMPLETION_CHECK_INTERVAL: 'every 2 minutes',
+  COMPLETION_CHECK_INTERVAL: 'every 1 minutes',
 
-  // Target
-  HOURLY_TARGET: 1000,
+  // Target (~1800/hour with 3 workers × 5 emails × 1s interval)
+  HOURLY_TARGET: 1800,
 }
 
 admin.initializeApp()
@@ -79,8 +100,22 @@ function isValidEmail(email) {
 
 async function sendCompletionNotification(campaignId, domain, stats) {
   try {
+    console.log(
+      `📧 Attempting to send completion notification for ${campaignId} to ${DOMAIN_CONFIG[domain]?.notifyEmail || DOMAIN_CONFIG['maulfaq.online']?.notifyEmail}`,
+    )
+
     const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG['maulfaq.online']
+
+    if (!config) {
+      console.error(`❌ No domain config found for ${domain}, falling back to maulfaq.online`)
+    }
+
+    console.log(`🔑 Using API key for domain: ${domain || 'maulfaq.online'}`)
+
     const resend = new Resend(config.apiKey)
+
+    const notifyEmail = config.notifyEmail || 'ayodeleava505@gmail.com'
+    console.log(`📨 Sending to: ${notifyEmail}`)
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -104,16 +139,20 @@ async function sendCompletionNotification(campaignId, domain, stats) {
       </div>
     `
 
-    await resend.emails.send({
-      from: `Send Blaster <noreply@${domain}>`,
-      to: config.notifyEmail,
+    const result = await resend.emails.send({
+      from: `Send Blaster <noreply@${domain || 'maulfaq.online'}>`,
+      to: notifyEmail,
       subject: `✅ Campaign Complete: ${campaignId}`,
       html: htmlContent,
     })
 
-    console.log(`✅ Completion notification sent for campaign ${campaignId}`)
+    console.log(
+      `✅ Completion notification SENT for campaign ${campaignId}. Resend ID: ${result?.id || 'N/A'}`,
+    )
   } catch (err) {
-    console.error('❌ Failed to send completion notification:', err.message)
+    console.error(`❌ Failed to send completion notification for ${campaignId}:`, err.message)
+    console.error('Full error:', err)
+    throw err // Re-throw so the caller knows it failed
   }
 }
 
@@ -362,6 +401,7 @@ async function checkCampaignCompletion() {
   console.log('📊 Checking campaign completion...')
 
   try {
+    // Step 1: Check if any emails are still pending
     const pendingSnapshot = await db
       .collection('emailQueue')
       .where('status', 'in', ['pending', 'pending_retry', 'distributed'])
@@ -369,25 +409,50 @@ async function checkCampaignCompletion() {
       .get()
 
     if (!pendingSnapshot.empty) {
-      console.log('⏳ Active campaigns still in progress')
+      console.log('⏳ Active campaigns still in progress - skipping completion check')
       return
     }
 
-    const tenMinutesAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 10 * 60 * 1000))
+    // Step 2: Find recently processed emails (sent or failed in last 30 minutes)
+    const thirtyMinutesAgo = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 30 * 60 * 1000),
+    )
 
-    const recentSnapshot = await db
+    console.log(
+      '🔍 Looking for recently completed campaigns since:',
+      thirtyMinutesAgo.toDate().toISOString(),
+    )
+
+    // Query 1: Recently SENT emails
+    const sentSnapshot = await db
       .collection('emailQueue')
-      .where('status', 'in', ['sent', 'failed'])
-      .where('sentAt', '>=', tenMinutesAgo)
+      .where('status', '==', 'sent')
+      .where('sentAt', '>=', thirtyMinutesAgo)
       .get()
 
-    if (recentSnapshot.empty) {
-      console.log('ℹ️ No recently completed campaigns')
+    // Query 2: Recently FAILED emails (they don't have sentAt, use lastAttempt)
+    const failedSnapshot = await db
+      .collection('emailQueue')
+      .where('status', '==', 'failed')
+      .where('lastAttempt', '>=', thirtyMinutesAgo)
+      .get()
+
+    // Merge results
+    const allDocs = [...sentSnapshot.docs, ...failedSnapshot.docs]
+    console.log(
+      `📋 Found ${sentSnapshot.size} sent + ${failedSnapshot.size} failed = ${allDocs.length} total recently processed emails`,
+    )
+
+    console.log(`📋 Found ${recentSnapshot.size} recently processed emails`)
+
+    if (allDocs.length === 0) {
+      console.log('ℹ️ No recently completed campaigns found')
       return
     }
 
+    // Group by campaign
     const campaigns = {}
-    recentSnapshot.docs.forEach((doc) => {
+    allDocs.forEach((doc) => {
       const data = doc.data()
       if (!campaigns[data.campaignId]) {
         campaigns[data.campaignId] = {
@@ -399,20 +464,36 @@ async function checkCampaignCompletion() {
         }
       }
       campaigns[data.campaignId].total++
-      if (doc.data().status === 'sent') campaigns[data.campaignId].sent++
+      if (data.status === 'sent') campaigns[data.campaignId].sent++
       else campaigns[data.campaignId].failed++
     })
 
+    console.log(
+      `📊 Found ${Object.keys(campaigns).length} campaigns to check:`,
+      Object.keys(campaigns),
+    )
+
+    // Check which campaigns have already been notified
     for (const campaignId of Object.keys(campaigns)) {
-      const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
-      if (campaignDoc.exists && campaignDoc.data().notificationSent) {
-        campaigns[campaignId].notified = true
+      try {
+        const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
+        if (campaignDoc.exists && campaignDoc.data().notificationSent) {
+          campaigns[campaignId].notified = true
+          console.log(`✉️ Campaign ${campaignId} already notified`)
+        }
+      } catch (e) {
+        console.warn(`⚠️ Could not check campaign ${campaignId}:`, e.message)
       }
     }
 
+    // Process each un-notified campaign
     for (const [campaignId, stats] of Object.entries(campaigns)) {
-      if (stats.notified) continue
+      if (stats.notified) {
+        console.log(`⏭️ Skipping ${campaignId} - already notified`)
+        continue
+      }
 
+      // Double-check no pending emails remain for this campaign
       const campaignPending = await db
         .collection('emailQueue')
         .where('campaignId', '==', campaignId)
@@ -420,10 +501,17 @@ async function checkCampaignCompletion() {
         .limit(1)
         .get()
 
-      if (!campaignPending.empty) continue
+      if (!campaignPending.empty) {
+        console.log(`⏳ Campaign ${campaignId} still has pending emails - skipping notification`)
+        continue
+      }
 
+      console.log(`🎯 Campaign ${campaignId} is complete! Stats:`, stats)
+
+      // Mark campaign as completed
       await db.collection('campaigns').doc(campaignId).set(
         {
+          status: 'completed',
           notificationSent: true,
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
           stats,
@@ -431,11 +519,27 @@ async function checkCampaignCompletion() {
         { merge: true },
       )
 
-      await sendCompletionNotification(campaignId, stats.domain, stats)
-      console.log(`📧 Completion notification sent for campaign ${campaignId}`)
+      console.log(`💾 Campaign ${campaignId} marked as completed in Firestore`)
+
+      // Send completion email
+      try {
+        await sendCompletionNotification(campaignId, stats.domain, stats)
+        console.log(`📧 Completion notification SENT for campaign ${campaignId}`)
+      } catch (notifyErr) {
+        console.error(`❌ Failed to send notification for ${campaignId}:`, notifyErr.message)
+        // Don't mark as notified if email failed - will retry next run
+        await db.collection('campaigns').doc(campaignId).set(
+          {
+            notificationSent: false,
+            notificationError: notifyErr.message,
+          },
+          { merge: true },
+        )
+      }
     }
   } catch (err) {
     console.error('❌ Campaign completion check failed:', err.message)
+    console.error('Full error:', err)
   }
 }
 
@@ -535,20 +639,32 @@ exports.sendBlaster = onCall(
   },
 )
 
-// 2. DISTRIBUTOR — Runs first, assigns emails to worker queues
+// 2. DISTRIBUTOR — Runs first, assigns emails to worker queues, then triggers workers
 exports.emailDistributor = onSchedule(
   {
     schedule: 'every 1 minutes',
-    memory: '256MiB',
-    timeoutSeconds: 60,
+    memory: '512MiB',
+    timeoutSeconds: 120,
     maxInstances: 1,
   },
   async () => {
-    await distributeEmails()
+    const distResult = await distributeEmails()
+
+    // If we distributed emails, trigger workers immediately (don't wait for next minute)
+    if (distResult.distributed > 0) {
+      console.log('🚀 Triggering workers immediately after distribution...')
+
+      // Run all 3 workers in parallel with small stagger
+      await Promise.all([
+        runWorker('workerQueue1', 'Worker-1'),
+        sleep(1000).then(() => runWorker('workerQueue2', 'Worker-2')),
+        sleep(2000).then(() => runWorker('workerQueue3', 'Worker-3')),
+      ])
+    }
   },
 )
 
-// 3. WORKER 1
+// 3. WORKER 1 — Backup scheduled run (in case distributor missed something)
 exports.emailWorker1 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -561,7 +677,7 @@ exports.emailWorker1 = onSchedule(
   },
 )
 
-// 4. WORKER 2 (offset 20s)
+// 4. WORKER 2 — Backup scheduled run
 exports.emailWorker2 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -570,12 +686,12 @@ exports.emailWorker2 = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    await sleep(20000)
+    await sleep(5000)
     await runWorker('workerQueue2', 'Worker-2')
   },
 )
 
-// 5. WORKER 3 (offset 40s)
+// 5. WORKER 3 — Backup scheduled run
 exports.emailWorker3 = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -584,7 +700,7 @@ exports.emailWorker3 = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    await sleep(40000)
+    await sleep(10000)
     await runWorker('workerQueue3', 'Worker-3')
   },
 )
