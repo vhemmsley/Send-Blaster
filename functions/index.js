@@ -414,28 +414,26 @@ async function checkCampaignCompletion() {
       return
     }
 
-    // Step 2: Find recently processed emails (sent or failed in last 30 minutes)
-    const thirtyMinutesAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 30 * 60 * 1000),
-    )
+    // Step 2: Find recently processed emails (sent or failed in last 5 minutes)
+    const fiveMinutesAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000))
 
     console.log(
       '🔍 Looking for recently completed campaigns since:',
-      thirtyMinutesAgo.toDate().toISOString(),
+      fiveMinutesAgo.toDate().toISOString(),
     )
 
     // Query 1: Recently SENT emails
     const sentSnapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'sent')
-      .where('sentAt', '>=', thirtyMinutesAgo)
+      .where('sentAt', '>=', fiveMinutesAgo)
       .get()
 
     // Query 2: Recently FAILED emails (they don't have sentAt, use lastAttempt)
     const failedSnapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'failed')
-      .where('lastAttempt', '>=', thirtyMinutesAgo)
+      .where('lastAttempt', '>=', fiveMinutesAgo)
       .get()
 
     // Merge results
