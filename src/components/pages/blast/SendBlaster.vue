@@ -607,20 +607,27 @@ export default {
       return this.currentCampaign.status || 'queued'
     },
 
-    estimatedCompletionTime() {
+    eestimatedCompletionTime() {
+      // Count ALL emails that haven't been fully processed yet
       const pending = this.campaignStats.pending || 0
       const retry = this.campaignStats.pending_retry || 0
       const distributed = this.campaignStats.distributed || 0
       const totalRemaining = pending + retry + distributed
 
-      const minutes = Math.ceil(totalRemaining / 54) //
+      // Backend throughput: 27 emails per 30s = 54 emails per minute
+      const RATE_PER_MINUTE = 54
 
-      if (minutes < 1) return 'Complete!'
+      if (totalRemaining <= 0) return 'Complete!'
+
+      const minutes = Math.ceil(totalRemaining / RATE_PER_MINUTE)
+
+      if (minutes < 1) return '< 1 min'
       if (minutes === 1) return '1 min'
       if (minutes < 60) return `${minutes} mins`
+
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
-      return `${hours}h ${mins}m`
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
     },
   },
 
@@ -668,7 +675,7 @@ export default {
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${data.queued} emails queued. Sending at ~1000/hour rate. You will receive a completion email at deliveryme69@gmail.com`
+        this.message = `${data.queued} emails queued. Sending at ~${RATE_PER_MINUTE * 60}/hour rate. You will receive a completion email at deliveryme69@gmail.com`
 
         // Start polling immediately with the new campaign ID
         this.startPolling(this.currentCampaignId)

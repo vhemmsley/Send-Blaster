@@ -62,10 +62,10 @@ const DOMAIN_CONFIG = {
 // Rate limiting configuration
 const CONFIG = {
   // Worker settings - each worker gets its own batch from the distributor
-  BATCH_SIZE: 18, // Number of emails each worker processes per run (3 workers × 18 = 54 emails per minute max)
+  BATCH_SIZE: 27, // ← Changed from 18 (gives headroom for 9 emails/worker)
 
   // Timing
-  EMAIL_INTERVAL_MS: 500, // 1 second between each email (faster)
+  EMAIL_INTERVAL_MS: 500, // Keep at 500ms
 
   // Retry settings
   MAX_RETRIES: 2,
@@ -74,8 +74,8 @@ const CONFIG = {
   // Campaign completion
   COMPLETION_CHECK_INTERVAL: 'every 1 minutes',
 
-  // Target (~1800/hour with 3 workers × 5 emails × 1s interval)
-  HOURLY_TARGET: 1800,
+  // Target: 54/min × 60 = 3240/hour
+  HOURLY_TARGET: 3240, // ← Changed from 1800
 }
 
 admin.initializeApp()
@@ -204,11 +204,11 @@ async function distributeEmails() {
   console.log('📦 Distributor starting...')
 
   try {
-    // Pull up to 15 pending emails from main queue (no new index needed)
+    // Pull up to 27 pending emails from main queue (9 per worker × 3 workers)
     const snapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'pending')
-      .limit(15)
+      .limit(27) // ← Changed from 15
       .get()
 
     if (snapshot.empty) {
