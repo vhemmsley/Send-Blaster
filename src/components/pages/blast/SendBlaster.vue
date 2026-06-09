@@ -673,7 +673,7 @@ export default {
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${data.queued} emails queued. Sending at ~${RATE_PER_MINUTE * 60}/hour rate. You will receive a completion email at deliveryme69@gmail.com`
+        this.message = `${data.queued} emails queued. Sending at ~3,240/hour rate. You will receive a completion email at deliveryme69@gmail.com`
 
         // Start polling immediately with the new campaign ID
         this.startPolling(this.currentCampaignId)
