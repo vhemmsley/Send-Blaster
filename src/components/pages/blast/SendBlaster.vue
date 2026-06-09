@@ -613,19 +613,14 @@ export default {
       const distributed = this.campaignStats.distributed || 0
       const totalRemaining = pending + retry + distributed
 
-      const ratePerMinute = 54
+      const minutes = Math.ceil(totalRemaining / 54) //
 
-      if (totalRemaining <= 0) return 'Complete!'
-
-      const minutes = Math.ceil(totalRemaining / ratePerMinute)
-
-      if (minutes < 1) return '< 1 min'
+      if (minutes < 1) return 'Complete!'
       if (minutes === 1) return '1 min'
       if (minutes < 60) return `${minutes} mins`
-
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+      return `${hours}h ${mins}m`
     },
   },
 
@@ -673,7 +668,7 @@ export default {
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${data.queued} emails queued. Sending at ~3,240/hour rate. You will receive a completion email at deliveryme69@gmail.com`
+        this.message = `${data.queued} emails queued. Sending at ~3240/hour rate. You will receive a completion email at deliveryme69@gmail.com`
 
         // Start polling immediately with the new campaign ID
         this.startPolling(this.currentCampaignId)
