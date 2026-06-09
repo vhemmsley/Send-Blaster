@@ -607,19 +607,17 @@ export default {
       return this.currentCampaign.status || 'queued'
     },
 
-    eestimatedCompletionTime() {
-      // Count ALL emails that haven't been fully processed yet
+    estimatedCompletionTime() {
       const pending = this.campaignStats.pending || 0
       const retry = this.campaignStats.pending_retry || 0
       const distributed = this.campaignStats.distributed || 0
       const totalRemaining = pending + retry + distributed
 
-      // Backend throughput: 27 emails per 30s = 54 emails per minute
-      const RATE_PER_MINUTE = 54
+      const ratePerMinute = 54
 
       if (totalRemaining <= 0) return 'Complete!'
 
-      const minutes = Math.ceil(totalRemaining / RATE_PER_MINUTE)
+      const minutes = Math.ceil(totalRemaining / ratePerMinute)
 
       if (minutes < 1) return '< 1 min'
       if (minutes === 1) return '1 min'
