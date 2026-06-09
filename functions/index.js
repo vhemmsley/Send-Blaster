@@ -54,13 +54,13 @@ const DOMAIN_CONFIG = {
 // Rate limiting configuration
 const CONFIG = {
   // Worker settings - each worker gets its own batch from the distributor
-  BATCH_SIZE: 5,
+  BATCH_SIZE: 18, // Number of emails each worker processes per run (3 workers × 18 = 54 emails per minute max)
 
   // Timing
-  EMAIL_INTERVAL_MS: 1000, // 1 second between each email (faster)
+  EMAIL_INTERVAL_MS: 500, // 1 second between each email (faster)
 
   // Retry settings
-  MAX_RETRIES: 3,
+  MAX_RETRIES: 2,
   RETRY_DELAY_MINUTES: 5,
 
   // Campaign completion
@@ -656,7 +656,7 @@ exports.sendBlaster = onCall(
 // 2. DISTRIBUTOR — Runs first, assigns emails to worker queues, then triggers workers
 exports.emailDistributor = onSchedule(
   {
-    schedule: 'every 1 minutes',
+    schedule: 'every 30 seconds',
     memory: '512MiB',
     timeoutSeconds: 120,
     maxInstances: 1,
@@ -681,7 +681,7 @@ exports.emailDistributor = onSchedule(
 // 3. WORKER 1 — Backup scheduled run (in case distributor missed something)
 exports.emailWorker1 = onSchedule(
   {
-    schedule: 'every 1 minutes',
+    schedule: 'every 30 seconds',
     memory: '512MiB',
     timeoutSeconds: 300,
     maxInstances: 1,
@@ -694,7 +694,7 @@ exports.emailWorker1 = onSchedule(
 // 4. WORKER 2 — Backup scheduled run
 exports.emailWorker2 = onSchedule(
   {
-    schedule: 'every 1 minutes',
+    schedule: 'every 30 seconds',
     memory: '512MiB',
     timeoutSeconds: 300,
     maxInstances: 1,
@@ -708,7 +708,7 @@ exports.emailWorker2 = onSchedule(
 // 5. WORKER 3 — Backup scheduled run
 exports.emailWorker3 = onSchedule(
   {
-    schedule: 'every 1 minutes',
+    schedule: 'every 30 seconds',
     memory: '512MiB',
     timeoutSeconds: 300,
     maxInstances: 1,
@@ -817,6 +817,265 @@ exports.getCampaigns = onCall(
     }
   },
 )
+
+// =========================
+// ORPHANED EMAIL RECOVERY
+// =========================
+
+/**
+ * Finds emails stuck in 'distributed' status that have no corresponding
+ * document in their assigned worker queue (orphaned due to worker crash/deletion).
+ * Resets them back to 'pending' so the distributor can re-assign them.
+ */
+async function recoverOrphanedEmails() {
+  console.log('🔍 Recovery Worker: Scanning for orphaned emails...')
+
+  const now = admin.firestore.Timestamp.now()
+  // Consider emails orphaned if they've been distributed for > 3 minutes
+  // without being picked up by a worker
+  const orphanThresholdMinutes = 3
+  const cutoff = admin.firestore.Timestamp.fromDate(
+    new Date(Date.now() - orphanThresholdMinutes * 60 * 1000),
+  )
+
+  try {
+    // Query 1: Find old 'distributed' emails in emailQueue
+    const distributedSnapshot = await db
+      .collection('emailQueue')
+      .where('status', '==', 'distributed')
+      .where('distributedAt', '<=', cutoff)
+      .limit(50)
+      .get()
+
+    if (distributedSnapshot.empty) {
+      console.log('✅ Recovery Worker: No orphaned emails found')
+      return { recovered: 0, checked: 0 }
+    }
+
+    console.log(`🔍 Recovery Worker: Found ${distributedSnapshot.size} potentially orphaned emails`)
+
+    let recovered = 0
+    let stillInWorkerQueue = 0
+
+    for (const doc of distributedSnapshot.docs) {
+      const data = doc.data()
+      const workerQueue = data.workerQueue
+      const originalDocId = doc.id
+
+      if (!workerQueue) {
+        // No worker queue assigned — definitely orphaned
+        console.log(`🔄 Recovery: ${data.email} has no workerQueue assigned, resetting to pending`)
+        await doc.ref.update({
+          status: 'pending',
+          recoveredAt: now,
+          recoveryReason: 'missing_workerQueue_field',
+        })
+        recovered++
+        continue
+      }
+
+      // Check if the document still exists in the worker queue
+      // We need to query by originalDocId since worker queue docs have random IDs
+      const workerDocs = await db
+        .collection(workerQueue)
+        .where('originalDocId', '==', originalDocId)
+        .limit(1)
+        .get()
+
+      if (workerDocs.empty) {
+        // Document was in worker queue but is gone — orphaned
+        console.log(`🔄 Recovery: ${data.email} orphaned from ${workerQueue}, resetting to pending`)
+        await doc.ref.update({
+          status: 'pending',
+          recoveredAt: now,
+          recoveryReason: `worker_queue_doc_missing_in_${workerQueue}`,
+          previousWorkerQueue: workerQueue,
+          // Clear the worker queue assignment
+          workerQueue: admin.firestore.FieldValue.delete(),
+          distributedAt: admin.firestore.FieldValue.delete(),
+        })
+        recovered++
+      } else {
+        // Still exists in worker queue — worker just hasn't processed it yet
+        stillInWorkerQueue++
+        console.log(`⏳ Recovery: ${data.email} still in ${workerQueue}, skipping`)
+      }
+    }
+
+    console.log(
+      `✅ Recovery Worker: ${recovered} recovered, ${stillInWorkerQueue} still in queue, ${distributedSnapshot.size} checked`,
+    )
+    return { recovered, checked: distributedSnapshot.size, stillInWorkerQueue }
+  } catch (err) {
+    console.error('❌ Recovery Worker crashed:', err.message)
+    return { recovered: 0, checked: 0, error: err.message }
+  }
+}
+
+// Also add a more aggressive "stuck distributed" check that doesn't require distributedAt index
+// This handles cases where distributedAt might be missing or index isn't ready
+async function recoverStuckDistributed() {
+  console.log('🔍 Recovery Worker (fallback): Checking for stuck distributed emails...')
+
+  try {
+    // Fallback: get all distributed emails (limited) and check age in memory
+    // This avoids needing a composite index on status + distributedAt
+    const snapshot = await db
+      .collection('emailQueue')
+      .where('status', '==', 'distributed')
+      .limit(100)
+      .get()
+
+    if (snapshot.empty) {
+      return { recovered: 0 }
+    }
+
+    const now = Date.now()
+    const orphanThresholdMs = 5 * 60 * 1000 // 5 minutes
+    let recovered = 0
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data()
+      const distributedAt = data.distributedAt?.toDate?.() || null
+
+      // If distributedAt is missing or very old, recover it
+      const isOrphaned = !distributedAt || now - distributedAt.getTime() > orphanThresholdMs
+
+      if (isOrphaned) {
+        // Verify it's not in worker queue
+        const workerQueue = data.workerQueue
+        let inWorkerQueue = false
+
+        if (workerQueue) {
+          const workerCheck = await db
+            .collection(workerQueue)
+            .where('originalDocId', '==', doc.id)
+            .limit(1)
+            .get()
+          inWorkerQueue = !workerCheck.empty
+        }
+
+        if (!inWorkerQueue) {
+          await doc.ref.update({
+            status: 'pending',
+            recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+            recoveryReason: distributedAt ? 'stuck_distributed_timeout' : 'missing_distributedAt',
+            ...(workerQueue ? { previousWorkerQueue: workerQueue } : {}),
+            workerQueue: admin.firestore.FieldValue.delete(),
+            distributedAt: admin.firestore.FieldValue.delete(),
+          })
+          recovered++
+          console.log(`🔄 Recovered stuck email: ${data.email}`)
+        }
+      }
+    }
+
+    return { recovered }
+  } catch (err) {
+    console.error('❌ Recovery fallback crashed:', err.message)
+    return { recovered: 0, error: err.message }
+  }
+}
+
+// 10. ORPHANED EMAIL RECOVERY — Runs frequently to catch stuck emails
+exports.emailRecoveryWorker = onSchedule(
+  {
+    schedule: 'every 2 minutes',
+    memory: '256MiB',
+    timeoutSeconds: 120,
+    maxInstances: 1,
+  },
+  async () => {
+    // Run both recovery methods for maximum safety
+    const result1 = await recoverOrphanedEmails()
+    const result2 = await recoverStuckDistributed()
+
+    console.log('📊 Recovery summary:', {
+      orphanedRecovered: result1.recovered || 0,
+      stuckRecovered: result2.recovered || 0,
+    })
+  },
+)
+
+// 11. EMERGENCY RECOVERY — Runs less frequently but checks ALL distributed emails
+exports.emailEmergencyRecovery = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+  },
+  async () => {
+    console.log('🚨 Emergency Recovery: Deep scan starting...')
+
+    try {
+      // Get ALL distributed emails without limit (paginated)
+      let lastDoc = null
+      let totalRecovered = 0
+      let totalChecked = 0
+      const batchSize = 500
+
+      while (true) {
+        let query = db
+          .collection('emailQueue')
+          .where('status', '==', 'distributed')
+          .limit(batchSize)
+
+        if (lastDoc) {
+          query = query.startAfter(lastDoc)
+        }
+
+        const snapshot = await query.get()
+        if (snapshot.empty) break
+
+        const batch = db.batch()
+        let batchRecovered = 0
+
+        for (const doc of snapshot.docs) {
+          const data = doc.data()
+          const workerQueue = data.workerQueue
+          let inWorkerQueue = false
+
+          if (workerQueue) {
+            const workerCheck = await db
+              .collection(workerQueue)
+              .where('originalDocId', '==', doc.id)
+              .limit(1)
+              .get()
+            inWorkerQueue = !workerCheck.empty
+          }
+
+          if (!inWorkerQueue) {
+            batch.update(doc.ref, {
+              status: 'pending',
+              recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+              recoveryReason: 'emergency_deep_scan',
+              ...(workerQueue ? { previousWorkerQueue: workerQueue } : {}),
+              workerQueue: admin.firestore.FieldValue.delete(),
+              distributedAt: admin.firestore.FieldValue.delete(),
+            })
+            batchRecovered++
+          }
+          totalChecked++
+        }
+
+        if (batchRecovered > 0) {
+          await batch.commit()
+          totalRecovered += batchRecovered
+          console.log(`🚨 Emergency: Recovered ${batchRecovered} in this batch`)
+        }
+
+        lastDoc = snapshot.docs[snapshot.docs.length - 1]
+        if (snapshot.docs.length < batchSize) break
+      }
+
+      console.log(`🚨 Emergency Recovery complete: ${totalRecovered}/${totalChecked} recovered`)
+    } catch (err) {
+      console.error('❌ Emergency Recovery failed:', err.message)
+    }
+  },
+)
+
 /*========================= EMAIL TEMPLATE (optional default) ========================= */
 
 function buildAirdropClaimHTML() {

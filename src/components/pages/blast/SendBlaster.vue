@@ -611,7 +611,7 @@ export default {
       const distributed = this.campaignStats.distributed || 0
       const totalRemaining = pending + retry + distributed
 
-      const minutes = Math.ceil(totalRemaining / 12)
+      const minutes = Math.ceil(totalRemaining / 54) //
 
       if (minutes < 1) return 'Complete!'
       if (minutes === 1) return '1 min'
