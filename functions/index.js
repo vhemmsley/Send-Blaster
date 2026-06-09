@@ -28,17 +28,25 @@ const DOMAIN_CONFIG = {
     apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+  /* 'sendmailsx.online': {
+    apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W',
+    notifyEmail: 'deliveryme69@gmail.com',
+  }, */
   // new config
+  'btchyperlive.online': {
+    apiKey: 're_dHUprrHp_NHEeP69qL5hr5LZMUsm4FRFZ',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'vledem-yfaq.online': {
+    apiKey: 're_6h69FDEn_8qfRa9BuRzB56N4N4ovpj9GN',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'mailzillapro.online': {
     apiKey: 're_M5WaWK4X_K5oCrkXhYuJVndKBPvXBMghy',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'hostmailerpro.online': {
     apiKey: 're_6fQ79DPd_5k3XHyMX3DAw89nFecs35TmE',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'sendmailsx.online': {
-    apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'perfectmailer.online': {
