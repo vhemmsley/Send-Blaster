@@ -513,7 +513,7 @@ export default {
         { domain: 'coredispatch.online', apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg' },
         { domain: 'mailnexio.online', apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW' },
         // new domains
-        { domain: 'btchyperlive.online', apiKey: 're_dHUprrHp_NHEeP69qL5hr5LZMUsm4FRFZ' },
+        // { domain: 'btchyperlive.online', apiKey: 're_dHUprrHp_NHEeP69qL5hr5LZMUsm4FRFZ' },
         { domain: 'vledem-yfaq.online', apiKey: 're_6h69FDEn_8qfRa9BuRzB56N4N4ovpj9GN' },
         { domain: 'mailzillapro.online', apiKey: 're_M5WaWK4X_K5oCrkXhYuJVndKBPvXBMghy' },
         { domain: 'hostmailerpro.online', apiKey: 're_6fQ79DPd_5k3XHyMX3DAw89nFecs35TmE' },
