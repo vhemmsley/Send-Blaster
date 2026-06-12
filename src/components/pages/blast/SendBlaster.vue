@@ -523,6 +523,7 @@ export default {
 
         //working
         { domain: 'sendcrestt.com.ng', apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR' },
+        { domain: 'bitcoinhyperzzz.online', apiKey: 're_Vb79LShm_GgM1a9hf3rwq73nu16gcefdo' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,

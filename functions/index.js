@@ -62,6 +62,10 @@ const DOMAIN_CONFIG = {
     apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+  'bitcoinhyperzzz.online': {
+    apiKey: 're_Vb79LShm_GgM1a9hf3rwq73nu16gcefdo',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
 }
 
 // Rate limiting configuration
