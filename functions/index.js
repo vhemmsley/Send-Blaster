@@ -57,6 +57,11 @@ const DOMAIN_CONFIG = {
     apiKey: 're_FxDaRfAH_6r8u8rpqCLHGgXT6n8MwmJAQ',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+
+  'sendcrestt.com.ng': {
+    apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
 }
 
 // Rate limiting configuration

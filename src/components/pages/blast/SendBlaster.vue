@@ -520,6 +520,9 @@ export default {
         //  { domain: 'sendmailsx.online', apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W' },
         { domain: 'perfectmailer.online', apiKey: 're_TEhZoVrf_C3r2rMwnHhzRofFu8GL1riQ8' },
         { domain: 'sendermailio.online', apiKey: 're_FxDaRfAH_6r8u8rpqCLHGgXT6n8MwmJAQ' },
+
+        //working
+        { domain: 'sendcrestt.com.ng', apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
