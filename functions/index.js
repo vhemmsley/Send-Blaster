@@ -8,70 +8,8 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
-  'maulfaq.online': {
-    apiKey: 're_US6wY6Fy_Hmm5nWSmff88srnPJJSSfhVJ',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'eventfarm.ng': {
-    apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'sendoraio.online': {
-    apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'coredispatch.online': {
-    apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'mailnexio.online': {
-    apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  /* 'sendmailsx.online': {
-    apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W',
-    notifyEmail: 'deliveryme69@gmail.com',
-  }, */
-  // new config
-  'btchyperlive.online': {
-    apiKey: 're_dHUprrHp_NHEeP69qL5hr5LZMUsm4FRFZ',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'vledem-yfaq.online': {
-    apiKey: 're_6h69FDEn_8qfRa9BuRzB56N4N4ovpj9GN',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'mailzillapro.online': {
-    apiKey: 're_M5WaWK4X_K5oCrkXhYuJVndKBPvXBMghy',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'hostmailerpro.online': {
-    apiKey: 're_6fQ79DPd_5k3XHyMX3DAw89nFecs35TmE',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'perfectmailer.online': {
-    apiKey: 're_TEhZoVrf_C3r2rMwnHhzRofFu8GL1riQ8',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'sendermailio.online': {
-    apiKey: 're_FxDaRfAH_6r8u8rpqCLHGgXT6n8MwmJAQ',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-
-  'sendcrestt.com.ng': {
-    apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'bitcoinhyperzzz.online': {
-    apiKey: 're_Vb79LShm_GgM1a9hf3rwq73nu16gcefdo',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'prolasun.online': {
-    apiKey: 're_3u9GsVp6_LhvvkbPpAFkj3kxwfFFLaiNy',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
   'eventfarmeerrsz.com': {
-    apiKey: 're_NnzeseQs_5HVXYGMx8YKdB1W7EUxDpB9n',
+    apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE',
     notifyEmail: 'deliveryme69@gmail.com',
   },
 }

@@ -507,7 +507,9 @@ export default {
       pollInterval: null,
 
       domains: [
-        { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
+        { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
+
+        /* { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
         { domain: 'eventfarm.ng', apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj' },
         { domain: 'sendoraio.online', apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m' },
         { domain: 'coredispatch.online', apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg' },
@@ -525,7 +527,7 @@ export default {
         { domain: 'sendcrestt.com.ng', apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR' },
         { domain: 'bitcoinhyperzzz.online', apiKey: 're_Vb79LShm_GgM1a9hf3rwq73nu16gcefdo' },
         { domain: 'prolasun.online', apiKey: 're_3u9GsVp6_LhvvkbPpAFkj3kxwfFFLaiNy' },
-        { domain: 'eventfarmeerrsz.com', apiKey: 're_NnzeseQs_5HVXYGMx8YKdB1W7EUxDpB9n' },
+        { domain: 'eventfarmeerrsz.com', apiKey: 're_NnzeseQs_5HVXYGMx8YKdB1W7EUxDpB9n' }, */
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -614,18 +616,41 @@ export default {
     },
 
     estimatedCompletionTime() {
+      // Get all status counts
       const pending = this.campaignStats.pending || 0
-      const retry = this.campaignStats.pending_retry || 0
       const distributed = this.campaignStats.distributed || 0
-      const totalRemaining = pending + retry + distributed
+      const retry = this.campaignStats.pending_retry || 0
+      const sent = this.campaignStats.sent || 0
+      const failed = this.campaignStats.failed || 0
 
-      const minutes = Math.ceil(totalRemaining / 54) //
+      const total = this.campaignProgress.total || 0
+      const completed = sent + failed
 
-      if (minutes < 1) return 'Complete!'
-      if (minutes === 1) return '1 min'
+      // If nothing is queued or everything is done
+      if (total === 0) return '—'
+      if (completed >= total) return 'Complete!'
+
+      // Only these statuses represent work still to be done
+      // distributed: in worker queues, being processed now
+      // pending: in main queue, waiting for distributor
+      // retry: will be re-queued soon
+      const totalRemaining = pending + distributed + retry
+
+      if (totalRemaining <= 0) return 'Finalizing...'
+
+      // Backend rate: 54 emails/minute (distributor pulls 27 every 30s)
+      const RATE_PER_MINUTE = 54
+
+      // Add 1 minute buffer for distributor cycle + worker pickup lag
+      const minutes = Math.ceil(totalRemaining / RATE_PER_MINUTE) + 1
+
+      if (minutes <= 1) return '< 1 min'
       if (minutes < 60) return `${minutes} mins`
+
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
+
+      if (mins === 0) return `${hours}h`
       return `${hours}h ${mins}m`
     },
   },
@@ -734,7 +759,7 @@ export default {
         this.campaignStats = data.stats || {}
         this.campaignProgress = data.progress || { total: 0, completed: 0, percentage: 0 }
 
-        if (result.progress && result.progress.percentage >= 100) {
+        if (data.progress && data.progress.percentage >= 100) {
           this.stopPolling()
           if (this.currentCampaign.notificationSent) {
             this.messageType = 'success'
