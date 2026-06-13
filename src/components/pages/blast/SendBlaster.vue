@@ -1,15 +1,45 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
     <div class="container mx-auto px-4 py-10">
-      <!-- Monthly Limit Counter -->
-      <div class="max-w-5xl mx-auto mb-6">
-        <div
-          class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl"
+      <!-- Header -->
+      <div class="max-w-5xl mx-auto text-center mb-10">
+        <h1
+          class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent"
         >
-          <div class="flex items-center justify-between mb-3">
+          Send Blaster Enterprise
+        </h1>
+        <p class="text-slate-400 text-lg">
+          Enterprise-grade email delivery with 3 parallel workers, automatic retries, and real-time
+          analytics.
+        </p>
+        <div class="flex justify-center gap-4 mt-4 text-sm">
+          <span
+            class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30"
+          >
+            ⚡ 3 Parallel Workers
+          </span>
+          <span
+            class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30"
+          >
+            🔄 Auto-Retry (3x)
+          </span>
+          <span
+            class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30"
+          >
+            📊 Real-time Stats
+          </span>
+        </div>
+      </div>
+
+      <!-- Monthly Limit Counter -->
+      <div class="max-w-5xl mx-auto mb-2">
+        <div
+          class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-3 shadow-xl"
+        >
+          <div class="flex items-center justify-between mb-1">
             <div class="flex items-center gap-2">
               <svg
-                class="w-5 h-5 text-blue-400"
+                class="w-3 h-3 text-blue-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -40,7 +70,7 @@
                 remaining
               </span>
             </div>
-            <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+            <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
               <div
                 class="h-3 rounded-full transition-all duration-500"
                 :class="monthlyProgressBarColor"
@@ -62,7 +92,7 @@
             class="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2"
           >
             <svg
-              class="w-5 h-5 text-red-400 shrink-0"
+              class="w-3 h-3 text-red-400 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -104,36 +134,6 @@
             After this batch:
             {{ (monthlyRemaining - validEmails.length).toLocaleString() }} remaining this month
           </div>
-        </div>
-      </div>
-
-      <!-- Header -->
-      <div class="max-w-5xl mx-auto text-center mb-10">
-        <h1
-          class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent"
-        >
-          Send Blaster Enterprise
-        </h1>
-        <p class="text-slate-400 text-lg">
-          Enterprise-grade email delivery with 3 parallel workers, automatic retries, and real-time
-          analytics.
-        </p>
-        <div class="flex justify-center gap-4 mt-4 text-sm">
-          <span
-            class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30"
-          >
-            ⚡ 3 Parallel Workers
-          </span>
-          <span
-            class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30"
-          >
-            🔄 Auto-Retry (3x)
-          </span>
-          <span
-            class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30"
-          >
-            📊 Real-time Stats
-          </span>
         </div>
       </div>
 
