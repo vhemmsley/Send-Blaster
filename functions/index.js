@@ -70,6 +70,10 @@ const DOMAIN_CONFIG = {
     apiKey: 're_3u9GsVp6_LhvvkbPpAFkj3kxwfFFLaiNy',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+  'eventfarmeerrsz.com': {
+    apiKey: 're_NnzeseQs_5HVXYGMx8YKdB1W7EUxDpB9n',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
 }
 
 // Rate limiting configuration
