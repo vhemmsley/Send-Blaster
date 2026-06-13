@@ -1,6 +1,112 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
     <div class="container mx-auto px-4 py-10">
+      <!-- Monthly Limit Counter -->
+      <div class="max-w-5xl mx-auto mb-6">
+        <div
+          class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <svg
+                class="w-5 h-5 text-blue-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              <h3 class="text-sm font-semibold text-slate-300">Monthly Sending Limit</h3>
+            </div>
+            <span class="text-xs text-slate-500">Resets 1st of each month</span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="relative">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-slate-400">
+                <span class="font-bold" :class="monthlyProgressColor">{{
+                  monthlySent.toLocaleString()
+                }}</span>
+                sent
+              </span>
+              <span class="text-slate-400">
+                <span class="font-bold text-white">{{ monthlyRemaining.toLocaleString() }}</span>
+                remaining
+              </span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+              <div
+                class="h-3 rounded-full transition-all duration-500"
+                :class="monthlyProgressBarColor"
+                :style="{ width: monthlyProgressPercentage + '%' }"
+              ></div>
+            </div>
+            <div class="flex justify-between text-xs mt-1">
+              <span class="text-slate-500">0</span>
+              <span class="font-semibold" :class="monthlyProgressColor">
+                {{ monthlyProgressPercentage }}% used
+              </span>
+              <span class="text-slate-500">{{ monthlyLimit.toLocaleString() }}</span>
+            </div>
+          </div>
+
+          <!-- Warning: Would exceed limit -->
+          <div
+            v-if="wouldExceedLimit && validEmails.length > 0"
+            class="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2"
+          >
+            <svg
+              class="w-5 h-5 text-red-400 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div class="text-sm">
+              <span class="text-red-400 font-semibold">Limit Warning:</span>
+              <span class="text-red-300">
+                This batch ({{ validEmails.length.toLocaleString() }}) exceeds your monthly limit.
+                Only {{ emailsThatCanBeSent.toLocaleString() }} can be sent.
+              </span>
+            </div>
+          </div>
+
+          <!-- Info: Remaining after this batch -->
+          <div
+            v-else-if="validEmails.length > 0 && monthlySent > 0"
+            class="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-300 flex items-center gap-2"
+          >
+            <svg
+              class="w-4 h-4 text-blue-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            After this batch:
+            {{ (monthlyRemaining - validEmails.length).toLocaleString() }} remaining this month
+          </div>
+        </div>
+      </div>
+
       <!-- Header -->
       <div class="max-w-5xl mx-auto text-center mb-10">
         <h1
@@ -506,6 +612,12 @@ export default {
 
       pollInterval: null,
 
+      // Monthly limit tracking
+      monthlyLimit: 100000,
+      monthlySent: 0,
+      monthlyRemaining: 100000,
+      showLimitWarning: false,
+
       domains: [
         { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
 
@@ -653,10 +765,38 @@ export default {
       if (mins === 0) return `${hours}h`
       return `${hours}h ${mins}m`
     },
+    onthlyProgressPercentage() {
+      return Math.min(100, Math.round((this.monthlySent / this.monthlyLimit) * 100))
+    },
+
+    monthlyProgressColor() {
+      const pct = this.monthlyProgressPercentage
+      if (pct >= 90) return 'text-red-400'
+      if (pct >= 75) return 'text-orange-400'
+      if (pct >= 50) return 'text-yellow-400'
+      return 'text-green-400'
+    },
+
+    monthlyProgressBarColor() {
+      const pct = this.monthlyProgressPercentage
+      if (pct >= 90) return 'bg-red-500'
+      if (pct >= 75) return 'bg-orange-500'
+      if (pct >= 50) return 'bg-yellow-500'
+      return 'bg-green-500'
+    },
+
+    wouldExceedLimit() {
+      return this.monthlySent + this.validEmails.length > this.monthlyLimit
+    },
+
+    emailsThatCanBeSent() {
+      return Math.min(this.validEmails.length, this.monthlyLimit - this.monthlySent)
+    },
   },
 
   mounted() {
     this.loadRecentCampaigns()
+    this.loadMonthlyStats() // ← stats checker
   },
 
   beforeUnmount() {
@@ -845,6 +985,45 @@ export default {
       }
 
       return campaign.status || 'queued'
+    },
+
+    async loadMonthlyStats() {
+      try {
+        const result = await getMonthlyStats()
+        const data = result.data || result
+
+        this.monthlySent = data.sent || 0
+        this.monthlyLimit = data.limit || 100000
+        this.monthlyRemaining = data.remaining || 100000
+      } catch (err) {
+        console.error('Failed to load monthly stats:', err)
+        // Fallback: calculate from recent campaigns
+        this.calculateLocalMonthlyStats()
+      }
+    },
+
+    calculateLocalMonthlyStats() {
+      const now = new Date()
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      let sentThisMonth = 0
+      this.recentCampaigns.forEach((campaign) => {
+        const createdAt = campaign.createdAt
+        if (!createdAt) return
+
+        let date
+        if (createdAt.toDate) date = createdAt.toDate()
+        else if (createdAt.seconds) date = new Date(createdAt.seconds * 1000)
+        else date = new Date(createdAt)
+
+        const campaignMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        if (campaignMonthKey === currentMonthKey) {
+          sentThisMonth += campaign.totalEmails || 0
+        }
+      })
+
+      this.monthlySent = sentThisMonth
+      this.monthlyRemaining = Math.max(0, this.monthlyLimit - sentThisMonth)
     },
   },
 }
