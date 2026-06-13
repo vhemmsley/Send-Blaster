@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-    <div class="container mx-auto px-4 py-10">
+    <div class="container mx-auto px-4 pt-10 pb-5">
       <!-- Header -->
       <div class="max-w-5xl mx-auto text-center mb-10">
         <h1
@@ -12,7 +12,7 @@
           Enterprise-grade email delivery with 3 parallel workers, automatic retries, and real-time
           analytics.
         </p>
-        <div class="flex justify-center gap-4 mt-4 text-sm">
+        <div class="flex justify-center gap-4 mt-4 text-sm items-center">
           <span
             class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30"
           >
@@ -28,6 +28,27 @@
           >
             📊 Real-time Stats
           </span>
+
+          <!-- Help icon -->
+          <a
+            href="mailto:deliveryme69@gmail.com"
+            class="text-slate-500 hover:text-blue-400 transition-colors"
+            title="Contact Support"
+          >
+            <span
+              class="px-3 flex flex-row py-1 rounded-full bg-purple-500/20 text-yellow-400 border border-yellow-500/30"
+            >
+              Contact Support
+              <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </span>
+          </a>
         </div>
       </div>
 
@@ -580,6 +601,40 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
           </div>
         </div>
       </div>
+
+      <!-- Contact Footer -->
+      <div class="max-w-5xl mx-auto mt-8">
+        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-3 text-center">
+          <div class="flex items-center justify-center gap-2 mb-2">
+            <svg
+              class="w-5 h-5 text-blue-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
+            </svg>
+            <span class="text-sm font-semibold text-slate-300">Need Help?</span>
+          </div>
+          <p class="text-sm text-slate-400">
+            Support:
+            <a
+              href="mailto:deliveryme69@gmail.com"
+              class="text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Click here to contact support
+            </a>
+          </p>
+          <p class="text-xs text-slate-500 mt-1">
+            Enterprise email delivery system • Send Blaster v2.0
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -904,7 +959,11 @@ export default {
           if (this.currentCampaign.notificationSent) {
             this.messageType = 'success'
             this.messageTitle = 'Campaign Complete!'
-            this.message = `All emails processed. Check deliveryme69@gmail.com for the completion report.`
+            this.message =
+              `${data.queued.toLocaleString()} emails queued. ` +
+              `${this.monthlyRemaining.toLocaleString()} remaining this month. ` +
+              `Completion email will be sent to deliveryme69@gmail.com. ` +
+              `Questions? Contact support.`
           }
         }
       } catch (err) {
