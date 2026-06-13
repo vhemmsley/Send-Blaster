@@ -600,6 +600,19 @@ exports.sendBlaster = onCall(
 
       await batch.commit()
 
+      // Track monthly usage
+      const now = new Date()
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const monthlyRef = db.collection('monthlyStats').doc(currentMonthKey)
+      await monthlyRef.set(
+        {
+          sent: admin.firestore.FieldValue.increment(validEmails.length),
+          month: currentMonthKey,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+
       console.log(`✅ Campaign ${campaignId} queued: ${validEmails.length} emails`)
 
       return {
@@ -1035,6 +1048,44 @@ exports.emailEmergencyRecovery = onSchedule(
       console.log(`🚨 Emergency Recovery complete: ${totalRecovered}/${totalChecked} recovered`)
     } catch (err) {
       console.error('❌ Emergency Recovery failed:', err.message)
+    }
+  },
+)
+
+// 12. GET MONTHLY SENDING STATS
+exports.getMonthlyStats = onCall(
+  {
+    memory: '256MiB',
+    timeoutSeconds: 30,
+    maxInstances: 10,
+  },
+  async (request) => {
+    try {
+      const now = new Date()
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      const monthlyDocRef = db.collection('monthlyStats').doc(currentMonthKey)
+      const monthlyDoc = await monthlyDocRef.get()
+
+      let sent = 0
+      if (monthlyDoc.exists) {
+        sent = monthlyDoc.data().sent || 0
+      }
+
+      const limit = 100000
+      const remaining = Math.max(0, limit - sent)
+      const percentage = Math.min(100, Math.round((sent / limit) * 100))
+
+      return {
+        currentMonth: currentMonthKey,
+        sent,
+        limit,
+        remaining,
+        percentage,
+      }
+    } catch (err) {
+      console.error('❌ getMonthlyStats error:', err)
+      throw new HttpsError('internal', err.message)
     }
   },
 )

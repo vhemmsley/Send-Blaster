@@ -585,7 +585,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
 </template>
 
 <script>
-import { sendBlaster, getCampaignStatus, getCampaigns } from '@/firebase/firebase'
+import { sendBlaster, getCampaignStatus, getCampaigns, getMonthlyStats } from '@/firebase/firebase'
 
 export default {
   name: 'SendBlasterEnterprise',
