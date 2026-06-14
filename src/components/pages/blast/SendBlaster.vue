@@ -236,7 +236,7 @@
               </label>
               <textarea
                 v-model="html"
-                rows="10"
+                rows="13"
                 placeholder="Paste your email HTML here..."
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 outline-none resize-none focus:ring-2 focus:ring-blue-500 font-mono text-sm transition-all"
               />
@@ -254,7 +254,7 @@
               </div>
               <textarea
                 v-model="emailInput"
-                rows="12"
+                rows="10"
                 placeholder="Paste emails here...
 
 john@gmail.com
