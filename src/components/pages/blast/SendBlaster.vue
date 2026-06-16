@@ -672,7 +672,13 @@ export default {
       showLimitWarning: false,
 
       domains: [
+        { domain: 'eventfullfarms.com', apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz' },
         { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
+        { domain: 'maileroptionpro.online', apiKey: 're_36z2BMjd_HqLdBRAxF7yFsHvutf3DAVYo' },
+        { domain: 'mailwalker.online', apiKey: 're_ZFVwfx7X_oPc1AqojsambMBAbSDwf3DAVYo' },
+        { domain: 'skymailer.online', apiKey: 're_ACL94NhZ_EHhuFxMgKbtDHyoRSYnL7piL' },
+        { domain: 'teammailers.online', apiKey: 're_gunQE2Rb_61dqkD4m4VJkBkeLk1RcKGbY' },
+        { domain: 'vantagemailer.online', apiKey: 're_LxMMKZGD_Dhszctr3ErWEDjPMXvc3YqLC' },
 
         /* { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
         { domain: 'eventfarm.ng', apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj' },
