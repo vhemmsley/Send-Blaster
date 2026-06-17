@@ -12,6 +12,10 @@ const DOMAIN_CONFIG = {
     apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz',
     notifyEmail: 'deliveryme69@gmail.com',
   },
+  'eventfarmsss.com': {
+    apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'eventfarmeerrsz.com': {
     apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE',
     notifyEmail: 'deliveryme69@gmail.com',

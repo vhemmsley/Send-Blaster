@@ -672,6 +672,7 @@ export default {
       showLimitWarning: false,
 
       domains: [
+        { domain: 'eventfarmsss.com', apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS' },
         { domain: 'eventfullfarms.com', apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz' },
         { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
 
