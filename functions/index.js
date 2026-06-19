@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'drivereduu.com': {
+    apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'eventfullfarms.com': {
     apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz',
     notifyEmail: 'deliveryme69@gmail.com',
