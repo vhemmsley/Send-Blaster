@@ -672,6 +672,7 @@ export default {
       showLimitWarning: false,
 
       domains: [
+        { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
         { domain: 'drivereduu.com', apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M' },
         { domain: 'eventfarmsss.com', apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS' },
         { domain: 'eventfullfarms.com', apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz' },
