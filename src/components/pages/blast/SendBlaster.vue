@@ -672,15 +672,20 @@ export default {
       showLimitWarning: false,
 
       domains: [
-        
-         { domain: 'dexeshed.xyz', apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx' },
         { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
-        { domain: 'drivereduu.com', apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M' },
+        { domain: 'dexeshed.xyz', apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx' },
+        { domain: 'shiftersed.com', apiKey: 're_SorUw5VU_PyCJsS1a2g3KbZ7wqmzLr7ZM' },
+        { domain: 'endulane.com', apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT' },
+        { domain: 'craftsvent.com', apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5' },
+        { domain: 'vellosync.com', apiKey: 're_6D9PPvfr_C9ecuzAq3nAAW9WgLuA2SsqH' },
+      
+      
+
+        /* { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
+          { domain: 'drivereduu.com', apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M' },
         { domain: 'eventfarmsss.com', apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS' },
         { domain: 'eventfullfarms.com', apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz' },
         { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
-
-        /* { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
         { domain: 'eventfarm.ng', apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj' },
         { domain: 'sendoraio.online', apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m' },
         { domain: 'coredispatch.online', apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg' },

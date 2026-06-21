@@ -8,28 +8,28 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'shiftersed.com': {
+    apiKey: 're_SorUw5VU_PyCJsS1a2g3KbZ7wqmzLr7ZM',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+'endulane.com': {
+    apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+'craftsvent.com': {
+    apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
+  'vellosync.com': {
+    apiKey: 're_6D9PPvfr_C9ecuzAq3nAAW9WgLuA2SsqH',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'dexeshed.xyz': {
     apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'dexxhubb.com': {
     apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'drivereduu.com': {
-    apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'eventfullfarms.com': {
-    apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'eventfarmsss.com': {
-    apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS',
-    notifyEmail: 'deliveryme69@gmail.com',
-  },
-  'eventfarmeerrsz.com': {
-    apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE',
     notifyEmail: 'deliveryme69@gmail.com',
   },
 }
