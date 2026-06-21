@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'dexeshed.xyz': {
+    apiKey: 're_eQ2bi9v5_PmkU7MDCBd1vqeeTsNpL8pMj',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'dexxhubb.com': {
     apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc',
     notifyEmail: 'deliveryme69@gmail.com',

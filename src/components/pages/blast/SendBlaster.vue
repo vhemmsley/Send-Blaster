@@ -672,6 +672,8 @@ export default {
       showLimitWarning: false,
 
       domains: [
+        
+         { domain: 'dexeshed.xyz', apiKey: 're_eQ2bi9v5_PmkU7MDCBd1vqeeTsNpL8pMj' },
         { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
         { domain: 'drivereduu.com', apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M' },
         { domain: 'eventfarmsss.com', apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS' },
