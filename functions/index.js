@@ -9,7 +9,7 @@ const admin = require('firebase-admin')
 
 const DOMAIN_CONFIG = {
   'shiftersed.com': {
-    apiKey: 're_SorUw5VU_PyCJsS1a2g3KbZ7wqmzLr7ZM',
+    apiKey: 're_NCg39GXy_J9rCbyjiigkXSRn1FkSzoStE',
     notifyEmail: 'deliveryme69@gmail.com',
   },
 'endulane.com': {
