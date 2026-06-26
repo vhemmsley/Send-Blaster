@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'lighterpe.com': {
+    apiKey: 're_Mfb6yKCe_Gw6kKKgjc2RFWGtaChTJME24',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'lightlcai.com': {
     apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb',
     notifyEmail: 'deliveryme69@gmail.com',

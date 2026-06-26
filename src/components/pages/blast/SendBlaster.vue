@@ -672,8 +672,12 @@ export default {
       showLimitWarning: false,
 
       domains: [
-        { domain: 'lightlcai.com', apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb' },
+        
         { domain: 'hyperlivee.com', apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM' },
+        { domain: 'lightlcai.com', apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb' },
+        { domain: 'lighterpe.com', apiKey: 're_Mfb6yKCe_Gw6kKKgjc2RFWGtaChTJME24' },
+
+
         { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
         { domain: 'dexeshed.xyz', apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx' },
         { domain: 'shiftersed.com', apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t' },
