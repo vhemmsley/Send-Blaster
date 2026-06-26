@@ -672,12 +672,13 @@ export default {
       showLimitWarning: false,
 
       domains: [
+        { domain: 'hyperlivee.com', apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM' },
         { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
         { domain: 'dexeshed.xyz', apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx' },
         { domain: 'shiftersed.com', apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t' },
         { domain: 'endulane.com', apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT' },
         { domain: 'craftsvent.com', apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5' },
-        { domain: 'vellosync.com', apiKey: 're_6D9PPvfr_C9ecuzAq3nAAW9WgLuA2SsqH' },
+        { domain: 'vellosync.com', apiKey: 're_72MgFRQF_FM6FhKKpGue4QhX9xnavns8y' },
       
       
 

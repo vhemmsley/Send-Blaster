@@ -8,20 +8,24 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'hyperlivee.com': {
+    apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
+    notifyEmail: 'deliveryme69@gmail.com',
+  },
   'shiftersed.com': {
     apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t',
     notifyEmail: 'deliveryme69@gmail.com',
   },
-'endulane.com': {
+  'endulane.com': {
     apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT',
     notifyEmail: 'deliveryme69@gmail.com',
   },
-'craftsvent.com': {
+  'craftsvent.com': {
     apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'vellosync.com': {
-    apiKey: 're_6D9PPvfr_C9ecuzAq3nAAW9WgLuA2SsqH',
+    apiKey: 're_72MgFRQF_FM6FhKKpGue4QhX9xnavns8y',
     notifyEmail: 'deliveryme69@gmail.com',
   },
   'dexeshed.xyz': {
