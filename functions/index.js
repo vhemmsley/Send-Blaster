@@ -9,7 +9,7 @@ const admin = require('firebase-admin')
 
 const DOMAIN_CONFIG = {
    'solanexx.com': {
-    apiKey: 're_QPBgR7U6_FYNcDnf1Ns5YHZmaypscvz5x',
+    apiKey: 're_4UPq3e7z_NWr5jSeVWCjdqY3fZpmXZUom',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'bestteamm.com': {
