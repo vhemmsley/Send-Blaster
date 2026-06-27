@@ -10,49 +10,49 @@ const admin = require('firebase-admin')
 const DOMAIN_CONFIG = {
   'lighterpe.com': {
     apiKey: 're_Mfb6yKCe_Gw6kKKgjc2RFWGtaChTJME24',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lightlcai.com': {
     apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'hyperlivee.com': {
     apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'shiftersed.com': {
     apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'endulane.com': {
     apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'craftsvent.com': {
     apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'vellosync.com': {
     apiKey: 're_72MgFRQF_FM6FhKKpGue4QhX9xnavns8y',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'dexeshed.xyz': {
     apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'dexxhubb.com': {
     apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc',
-    notifyEmail: 'deliveryme69@gmail.com',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
 
 // Rate limiting configuration
 const CONFIG = {
   // Worker settings - each worker gets its own batch from the distributor
-  BATCH_SIZE: 27, // ← Changed from 18 (gives headroom for 9 emails/worker)
+  BATCH_SIZE: 27,
 
   // Timing
-  EMAIL_INTERVAL_MS: 500, // Keep at 500ms
+  EMAIL_INTERVAL_MS: 500,
 
   // Retry settings
   MAX_RETRIES: 2,
@@ -62,7 +62,12 @@ const CONFIG = {
   COMPLETION_CHECK_INTERVAL: 'every 1 minutes',
 
   // Target: 54/min × 60 = 3240/hour
-  HOURLY_TARGET: 3240, // ← Changed from 1800
+  HOURLY_TARGET: 3240,
+
+  // Recovery settings
+  ORPHAN_THRESHOLD_MINUTES: 10,        // Increased from 3 to prevent race with active workers
+  STUCK_DISTRIBUTED_THRESHOLD_MS: 10 * 60 * 1000, // 10 minutes
+  LOCK_TIMEOUT_MINUTES: 15,            // If a worker locks an email but doesn't finish
 }
 
 admin.initializeApp()
@@ -166,7 +171,7 @@ async function sendSingleEmail(data, resend) {
       'X-Mailer': 'SendBlaster-Enterprise/1.0',
     }
 
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: `${data.fromName} <${data.fromEmail}>`,
       to: data.email,
       subject: data.subject,
@@ -174,8 +179,8 @@ async function sendSingleEmail(data, resend) {
       headers,
     })
 
-    console.log(`✅ Sent to ${data.email} [${data.campaignId}]`)
-    return { success: true, email: data.email }
+    console.log(`✅ Sent to ${data.email} [${data.campaignId}] ResendID: ${result?.id || 'N/A'}`)
+    return { success: true, email: data.email, resendId: result?.id }
   } catch (err) {
     console.error(`❌ Failed to send to ${data.email}: ${err.message}`)
     return { success: false, email: data.email, error: err.message }
@@ -184,7 +189,7 @@ async function sendSingleEmail(data, resend) {
 
 // =========================
 // DISTRIBUTOR — Pulls from main queue and assigns to worker queues
-// Runs once per minute, distributes to 3 worker queues
+// Runs every 30 seconds, distributes to 3 worker queues
 // =========================
 
 async function distributeEmails() {
@@ -195,7 +200,7 @@ async function distributeEmails() {
     const snapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'pending')
-      .limit(27) // ← Changed from 15
+      .limit(27)
       .get()
 
     if (snapshot.empty) {
@@ -207,7 +212,6 @@ async function distributeEmails() {
     const batch = db.batch()
     let distributed = 0
 
-    // Split into 3 groups of 5 and assign to worker queues
     const workerQueues = ['workerQueue1', 'workerQueue2', 'workerQueue3']
 
     for (let i = 0; i < docs.length; i++) {
@@ -229,6 +233,12 @@ async function distributeEmails() {
         status: 'distributed',
         distributedAt: admin.firestore.FieldValue.serverTimestamp(),
         workerQueue: workerQueue,
+        // Clear any old recovery/lock data
+        recoveredAt: admin.firestore.FieldValue.delete(),
+        recoveryReason: admin.firestore.FieldValue.delete(),
+        previousWorkerQueue: admin.firestore.FieldValue.delete(),
+        lockedAt: admin.firestore.FieldValue.delete(),
+        lockedBy: admin.firestore.FieldValue.delete(),
       })
 
       distributed++
@@ -245,13 +255,14 @@ async function distributeEmails() {
 
 // =========================
 // WORKER — Processes its own dedicated queue
+// FIXED: Idempotent, atomic transactions, lock-based
 // =========================
 
 async function runWorker(workerQueueName, workerName) {
   console.log(`🚀 ${workerName} starting...`)
 
   try {
-    // Pull from this worker's dedicated queue (no index needed - just get first N)
+    // Pull from this worker's dedicated queue
     const snapshot = await db.collection(workerQueueName).limit(CONFIG.BATCH_SIZE).get()
 
     if (snapshot.empty) {
@@ -261,22 +272,80 @@ async function runWorker(workerQueueName, workerName) {
 
     let sent = 0
     let failed = 0
+    let skipped = 0
 
     for (const doc of snapshot.docs) {
       const data = doc.data()
+      const originalDocId = data.originalDocId
+
+      if (!originalDocId) {
+        console.error(`❌ ${workerName}: Missing originalDocId, deleting orphan`)
+        await doc.ref.delete()
+        continue
+      }
+
+      const originalRef = db.collection('emailQueue').doc(originalDocId)
+
+      // ===== IDEMPOTENCY CHECK =====
+      // Check if this email is still actually distributed to us
+      const originalDoc = await originalRef.get()
+      if (!originalDoc.exists) {
+        console.log(`⚠️ ${workerName}: Original doc ${originalDocId} gone, cleaning up worker queue`)
+        await doc.ref.delete()
+        continue
+      }
+
+      const originalData = originalDoc.data()
+
+      // If already sent, just clean up
+      if (originalData.status === 'sent') {
+        console.log(`⚠️ ${workerName}: ${data.email} already sent, cleaning up`)
+        await doc.ref.delete()
+        skipped++
+        continue
+      }
+
+      // If not distributed or assigned to different worker, skip
+      if (originalData.status !== 'distributed') {
+        console.log(`⚠️ ${workerName}: ${data.email} status=${originalData.status}, not distributed, skipping`)
+        await doc.ref.delete()
+        skipped++
+        continue
+      }
+
+      // If another worker has locked it recently, skip
+      if (originalData.lockedAt) {
+        const lockedAt = originalData.lockedAt.toDate ? originalData.lockedAt.toDate() : new Date(originalData.lockedAt)
+        const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
+        if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES && originalData.lockedBy !== workerName) {
+          console.log(`⏳ ${workerName}: ${data.email} locked by ${originalData.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`)
+          continue // Don't delete from queue, another worker is handling it
+        }
+      }
+
+      // ===== LOCK THE EMAIL =====
+      // Mark that we're processing this email so recovery doesn't grab it
+      await originalRef.update({
+        lockedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lockedBy: workerName,
+      })
+
       const domainConfig = DOMAIN_CONFIG[data.domain]
 
       if (!domainConfig) {
         console.error(`❌ ${workerName}: No config for domain ${data.domain}`)
-        // Update original doc as failed
-        await db
-          .collection('emailQueue')
-          .doc(data.originalDocId)
-          .update({
+        
+        // Atomic update: mark failed + remove from worker queue
+        await db.runTransaction(async (t) => {
+          t.update(originalRef, {
             status: 'failed',
             error: `No API key configured for domain: ${data.domain}`,
+            lockedAt: admin.firestore.FieldValue.delete(),
+            lockedBy: admin.firestore.FieldValue.delete(),
           })
-        await doc.ref.delete()
+          t.delete(doc.ref)
+        })
+        
         failed++
         continue
       }
@@ -284,43 +353,77 @@ async function runWorker(workerQueueName, workerName) {
       const resend = new Resend(domainConfig.apiKey)
       const result = await sendSingleEmail(data, resend)
 
-      // Update original document
-      const originalRef = db.collection('emailQueue').doc(data.originalDocId)
+      // ===== ATOMIC UPDATE =====
+      // Update original document AND delete from worker queue in one transaction
+      try {
+        await db.runTransaction(async (t) => {
+          // Re-read original doc inside transaction to ensure freshness
+          const freshDoc = await t.get(originalRef)
+          if (!freshDoc.exists) {
+            t.delete(doc.ref)
+            return
+          }
 
-      if (result.success) {
-        await originalRef.update({
-          status: 'sent',
-          sentAt: admin.firestore.FieldValue.serverTimestamp(),
-          attempts: admin.firestore.FieldValue.increment(1),
-          lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-        sent++
-      } else {
-        const originalDoc = await originalRef.get()
-        const currentAttempts = (originalDoc.data()?.attempts || 0) + 1
-        const shouldRetry = currentAttempts < CONFIG.MAX_RETRIES
+          const freshData = freshDoc.data()
 
-        await originalRef.update({
-          status: shouldRetry ? 'pending_retry' : 'failed',
-          error: result.error,
-          attempts: currentAttempts,
-          lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
-          lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+          // Double-check we still own this
+          if (freshData.lockedBy !== workerName) {
+            console.warn(`⚠️ ${workerName}: Lock stolen on ${data.email}, aborting`)
+            return // Don't delete from queue, let the other worker handle it
+          }
+
+          if (result.success) {
+            t.update(originalRef, {
+              status: 'sent',
+              sentAt: admin.firestore.FieldValue.serverTimestamp(),
+              sentEmailId: result.resendId || null,
+              attempts: admin.firestore.FieldValue.increment(1),
+              lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+              lockedAt: admin.firestore.FieldValue.delete(),
+              lockedBy: admin.firestore.FieldValue.delete(),
+              error: admin.firestore.FieldValue.delete(),
+            })
+            sent++
+          } else {
+            const currentAttempts = (freshData.attempts || 0) + 1
+            const shouldRetry = currentAttempts < CONFIG.MAX_RETRIES
+
+            t.update(originalRef, {
+              status: shouldRetry ? 'pending_retry' : 'failed',
+              error: result.error,
+              attempts: currentAttempts,
+              lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+              lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+              lockedAt: admin.firestore.FieldValue.delete(),
+              lockedBy: admin.firestore.FieldValue.delete(),
+            })
+            failed++
+          }
+
+          // Always delete from worker queue
+          t.delete(doc.ref)
         })
-        failed++
+      } catch (txErr) {
+        console.error(`❌ ${workerName}: Transaction failed for ${data.email}:`, txErr.message)
+        // Try to unlock so recovery can pick it up
+        try {
+          await originalRef.update({
+            lockedAt: admin.firestore.FieldValue.delete(),
+            lockedBy: admin.firestore.FieldValue.delete(),
+          })
+        } catch (unlockErr) {
+          console.error(`❌ ${workerName}: Failed to unlock ${data.email}:`, unlockErr.message)
+        }
       }
 
-      // Delete from worker queue (done processing)
-      await doc.ref.delete()
-
-      // Rate limiting: 3 second interval between emails
+      // Rate limiting
       if (snapshot.docs.indexOf(doc) < snapshot.docs.length - 1) {
         await sleep(CONFIG.EMAIL_INTERVAL_MS)
       }
     }
 
-    console.log(`✅ ${workerName} complete: ${sent} sent, ${failed} failed`)
-    return { processed: snapshot.docs.length, sent, failed }
+    console.log(`✅ ${workerName} complete: ${sent} sent, ${failed} failed, ${skipped} skipped`)
+    return { processed: snapshot.docs.length, sent, failed, skipped }
   } catch (err) {
     console.error(`❌ ${workerName} crashed:`, err.message)
     return { processed: 0, sent: 0, failed: 0, error: err.message }
@@ -336,11 +439,6 @@ async function runRetryWorker() {
   console.log('🔄 Retry Worker starting...')
 
   try {
-    const fiveMinutesAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - CONFIG.RETRY_DELAY_MINUTES * 60 * 1000),
-    )
-
-    // Find emails ready for retry (no new index needed)
     const snapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'pending_retry')
@@ -349,7 +447,7 @@ async function runRetryWorker() {
 
     if (snapshot.empty) {
       console.log('⏭️ Retry Worker: No emails ready for retry')
-      return { processed: 0, sent: 0, failed: 0 }
+      return { processed: 0, reset: 0 }
     }
 
     let reset = 0
@@ -368,11 +466,26 @@ async function runRetryWorker() {
         continue
       }
 
+      // Don't retry if currently locked by a worker
+      if (data.lockedAt) {
+        const lockedAt = data.lockedAt.toDate ? data.lockedAt.toDate() : new Date(data.lockedAt)
+        const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
+        if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES) {
+          console.log(`⏳ Retry Worker: ${data.email} currently locked, skipping`)
+          continue
+        }
+      }
+
       // Reset to pending so distributor picks it up again
       await doc.ref.update({
         status: 'pending',
         retryCount: admin.firestore.FieldValue.increment(1),
         resetAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Clear any lock/assignment data
+        lockedAt: admin.firestore.FieldValue.delete(),
+        lockedBy: admin.firestore.FieldValue.delete(),
+        workerQueue: admin.firestore.FieldValue.delete(),
+        distributedAt: admin.firestore.FieldValue.delete(),
       })
 
       reset++
@@ -385,7 +498,7 @@ async function runRetryWorker() {
     return { processed: snapshot.docs.length, reset }
   } catch (err) {
     console.error('❌ Retry Worker crashed:', err.message)
-    return { processed: 0, sent: 0, failed: 0, error: err.message }
+    return { processed: 0, reset: 0, error: err.message }
   }
 }
 
@@ -397,7 +510,7 @@ async function checkCampaignCompletion() {
   console.log('📊 Checking campaign completion...')
 
   try {
-    // Step 1: Check if any emails are still pending
+    // Step 1: Check if any emails are still pending/distributed/locked
     const pendingSnapshot = await db
       .collection('emailQueue')
       .where('status', 'in', ['pending', 'pending_retry', 'distributed'])
@@ -424,7 +537,7 @@ async function checkCampaignCompletion() {
       .where('sentAt', '>=', fiveMinutesAgo)
       .get()
 
-    // Query 2: Recently FAILED emails (they don't have sentAt, use lastAttempt)
+    // Query 2: Recently FAILED emails
     const failedSnapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'failed')
@@ -436,8 +549,6 @@ async function checkCampaignCompletion() {
     console.log(
       `📋 Found ${sentSnapshot.size} sent + ${failedSnapshot.size} failed = ${allDocs.length} total recently processed emails`,
     )
-
-    console.log(`📋 Found ${allDocs.length} recently processed emails`)
 
     if (allDocs.length === 0) {
       console.log('ℹ️ No recently completed campaigns found')
@@ -524,7 +635,7 @@ async function checkCampaignCompletion() {
         console.error(`❌ Failed to send notification for ${campaignId}:`, notifyErr.message)
       }
 
-      // Mark campaign as completed (only mark notificationSent if email actually succeeded)
+      // Mark campaign as completed
       await db
         .collection('campaigns')
         .doc(campaignId)
@@ -588,7 +699,6 @@ exports.sendBlaster = onCall(
       }
 
       const validEmails = emails.map(sanitizeEmail).filter((e) => e && isValidEmail(e))
-
       const invalidEmails = emails.map(sanitizeEmail).filter((e) => e && !isValidEmail(e))
 
       if (validEmails.length === 0) {
@@ -672,7 +782,7 @@ exports.emailDistributor = onSchedule(
   async () => {
     const distResult = await distributeEmails()
 
-    // If we distributed emails, trigger workers immediately (don't wait for next minute)
+    // If we distributed emails, trigger workers immediately
     if (distResult.distributed > 0) {
       console.log('🚀 Triggering workers immediately after distribution...')
 
@@ -686,46 +796,9 @@ exports.emailDistributor = onSchedule(
   },
 )
 
-// 3. WORKER 1 — Backup scheduled run (in case distributor missed something)
-exports.emailWorker1 = onSchedule(
-  {
-    schedule: 'every 30 seconds',
-    memory: '512MiB',
-    timeoutSeconds: 300,
-    maxInstances: 1,
-  },
-  async () => {
-    await runWorker('workerQueue1', 'Worker-1')
-  },
-)
-
-// 4. WORKER 2 — Backup scheduled run
-exports.emailWorker2 = onSchedule(
-  {
-    schedule: 'every 30 seconds',
-    memory: '512MiB',
-    timeoutSeconds: 300,
-    maxInstances: 1,
-  },
-  async () => {
-    await sleep(5000)
-    await runWorker('workerQueue2', 'Worker-2')
-  },
-)
-
-// 5. WORKER 3 — Backup scheduled run
-exports.emailWorker3 = onSchedule(
-  {
-    schedule: 'every 30 seconds',
-    memory: '512MiB',
-    timeoutSeconds: 300,
-    maxInstances: 1,
-  },
-  async () => {
-    await sleep(10000)
-    await runWorker('workerQueue3', 'Worker-3')
-  },
-)
+// 3-5. WORKERS — REMOVED as scheduled functions to prevent race conditions
+// Workers are now ONLY triggered by the distributor after it assigns emails
+// This prevents workers from stealing jobs or processing stale queue items
 
 // 6. RETRY WORKER
 exports.retryWorker = onSchedule(
@@ -832,22 +905,19 @@ exports.getCampaigns = onCall(
 
 /**
  * Finds emails stuck in 'distributed' status that have no corresponding
- * document in their assigned worker queue (orphaned due to worker crash/deletion).
- * Resets them back to 'pending' so the distributor can re-assign them.
+ * document in their assigned worker queue. Resets them back to 'pending'.
+ * FIXED: Respects lock timeouts, longer thresholds to avoid racing active workers.
  */
 async function recoverOrphanedEmails() {
   console.log('🔍 Recovery Worker: Scanning for orphaned emails...')
 
   const now = admin.firestore.Timestamp.now()
-  // Consider emails orphaned if they've been distributed for > 3 minutes
-  // without being picked up by a worker
-  const orphanThresholdMinutes = 3
   const cutoff = admin.firestore.Timestamp.fromDate(
-    new Date(Date.now() - orphanThresholdMinutes * 60 * 1000),
+    new Date(Date.now() - CONFIG.ORPHAN_THRESHOLD_MINUTES * 60 * 1000),
   )
 
   try {
-    // Query 1: Find old 'distributed' emails in emailQueue
+    // Find old 'distributed' emails in emailQueue
     const distributedSnapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'distributed')
@@ -864,9 +934,22 @@ async function recoverOrphanedEmails() {
 
     let recovered = 0
     let stillInWorkerQueue = 0
+    let recentlyLocked = 0
 
     for (const doc of distributedSnapshot.docs) {
       const data = doc.data()
+
+      // Skip if recently locked by an active worker
+      if (data.lockedAt) {
+        const lockedAt = data.lockedAt.toDate ? data.lockedAt.toDate() : new Date(data.lockedAt)
+        const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
+        if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES) {
+          recentlyLocked++
+          console.log(`⏳ Recovery: ${data.email} locked by ${data.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`)
+          continue
+        }
+      }
+
       const workerQueue = data.workerQueue
       const originalDocId = doc.id
 
@@ -877,13 +960,14 @@ async function recoverOrphanedEmails() {
           status: 'pending',
           recoveredAt: now,
           recoveryReason: 'missing_workerQueue_field',
+          lockedAt: admin.firestore.FieldValue.delete(),
+          lockedBy: admin.firestore.FieldValue.delete(),
         })
         recovered++
         continue
       }
 
       // Check if the document still exists in the worker queue
-      // We need to query by originalDocId since worker queue docs have random IDs
       const workerDocs = await db
         .collection(workerQueue)
         .where('originalDocId', '==', originalDocId)
@@ -898,9 +982,10 @@ async function recoverOrphanedEmails() {
           recoveredAt: now,
           recoveryReason: `worker_queue_doc_missing_in_${workerQueue}`,
           previousWorkerQueue: workerQueue,
-          // Clear the worker queue assignment
           workerQueue: admin.firestore.FieldValue.delete(),
           distributedAt: admin.firestore.FieldValue.delete(),
+          lockedAt: admin.firestore.FieldValue.delete(),
+          lockedBy: admin.firestore.FieldValue.delete(),
         })
         recovered++
       } else {
@@ -911,23 +996,20 @@ async function recoverOrphanedEmails() {
     }
 
     console.log(
-      `✅ Recovery Worker: ${recovered} recovered, ${stillInWorkerQueue} still in queue, ${distributedSnapshot.size} checked`,
+      `✅ Recovery Worker: ${recovered} recovered, ${stillInWorkerQueue} still in queue, ${recentlyLocked} recently locked, ${distributedSnapshot.size} checked`,
     )
-    return { recovered, checked: distributedSnapshot.size, stillInWorkerQueue }
+    return { recovered, checked: distributedSnapshot.size, stillInWorkerQueue, recentlyLocked }
   } catch (err) {
     console.error('❌ Recovery Worker crashed:', err.message)
     return { recovered: 0, checked: 0, error: err.message }
   }
 }
 
-// Also add a more aggressive "stuck distributed" check that doesn't require distributedAt index
-// This handles cases where distributedAt might be missing or index isn't ready
+// Fallback recovery for stuck distributed emails without distributedAt index
 async function recoverStuckDistributed() {
   console.log('🔍 Recovery Worker (fallback): Checking for stuck distributed emails...')
 
   try {
-    // Fallback: get all distributed emails (limited) and check age in memory
-    // This avoids needing a composite index on status + distributedAt
     const snapshot = await db
       .collection('emailQueue')
       .where('status', '==', 'distributed')
@@ -939,18 +1021,26 @@ async function recoverStuckDistributed() {
     }
 
     const now = Date.now()
-    const orphanThresholdMs = 5 * 60 * 1000 // 5 minutes
     let recovered = 0
+    let skippedLocked = 0
 
     for (const doc of snapshot.docs) {
       const data = doc.data()
-      const distributedAt = data.distributedAt?.toDate?.() || null
 
-      // If distributedAt is missing or very old, recover it
-      const isOrphaned = !distributedAt || now - distributedAt.getTime() > orphanThresholdMs
+      // Skip if recently locked
+      if (data.lockedAt) {
+        const lockedAt = data.lockedAt.toDate ? data.lockedAt.toDate() : new Date(data.lockedAt)
+        const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
+        if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES) {
+          skippedLocked++
+          continue
+        }
+      }
+
+      const distributedAt = data.distributedAt?.toDate?.() || null
+      const isOrphaned = !distributedAt || now - distributedAt.getTime() > CONFIG.STUCK_DISTRIBUTED_THRESHOLD_MS
 
       if (isOrphaned) {
-        // Verify it's not in worker queue
         const workerQueue = data.workerQueue
         let inWorkerQueue = false
 
@@ -971,6 +1061,8 @@ async function recoverStuckDistributed() {
             ...(workerQueue ? { previousWorkerQueue: workerQueue } : {}),
             workerQueue: admin.firestore.FieldValue.delete(),
             distributedAt: admin.firestore.FieldValue.delete(),
+            lockedAt: admin.firestore.FieldValue.delete(),
+            lockedBy: admin.firestore.FieldValue.delete(),
           })
           recovered++
           console.log(`🔄 Recovered stuck email: ${data.email}`)
@@ -978,7 +1070,7 @@ async function recoverStuckDistributed() {
       }
     }
 
-    return { recovered }
+    return { recovered, skippedLocked }
   } catch (err) {
     console.error('❌ Recovery fallback crashed:', err.message)
     return { recovered: 0, error: err.message }
@@ -994,7 +1086,6 @@ exports.emailRecoveryWorker = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    // Run both recovery methods for maximum safety
     const result1 = await recoverOrphanedEmails()
     const result2 = await recoverStuckDistributed()
 
@@ -1017,7 +1108,6 @@ exports.emailEmergencyRecovery = onSchedule(
     console.log('🚨 Emergency Recovery: Deep scan starting...')
 
     try {
-      // Get ALL distributed emails without limit (paginated)
       let lastDoc = null
       let totalRecovered = 0
       let totalChecked = 0
@@ -1041,6 +1131,17 @@ exports.emailEmergencyRecovery = onSchedule(
 
         for (const doc of snapshot.docs) {
           const data = doc.data()
+
+          // Skip recently locked emails
+          if (data.lockedAt) {
+            const lockedAt = data.lockedAt.toDate ? data.lockedAt.toDate() : new Date(data.lockedAt)
+            const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
+            if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES) {
+              totalChecked++
+              continue
+            }
+          }
+
           const workerQueue = data.workerQueue
           let inWorkerQueue = false
 
@@ -1061,6 +1162,8 @@ exports.emailEmergencyRecovery = onSchedule(
               ...(workerQueue ? { previousWorkerQueue: workerQueue } : {}),
               workerQueue: admin.firestore.FieldValue.delete(),
               distributedAt: admin.firestore.FieldValue.delete(),
+              lockedAt: admin.firestore.FieldValue.delete(),
+              lockedBy: admin.firestore.FieldValue.delete(),
             })
             batchRecovered++
           }
@@ -1104,7 +1207,7 @@ exports.getMonthlyStats = onCall(
         sent = monthlyDoc.data().sent || 0
       }
 
-      const limit = 78957 //montly resend limit
+      const limit = 78957 // monthly resend limit
       const remaining = Math.max(0, limit - sent)
       const percentage = Math.min(100, Math.round((sent / limit) * 100))
 

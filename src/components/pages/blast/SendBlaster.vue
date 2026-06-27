@@ -51,14 +51,14 @@
       </div>
 
       <!-- Monthly Limit Counter -->
-      <div class="max-w-5xl mx-auto mb-2">
+      <div class="max-w-5xl mx-auto mb-6">
         <div
-          class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-3 shadow-xl"
+          class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 shadow-xl"
         >
-          <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <svg
-                class="w-3 h-3 text-blue-400"
+                class="w-4 h-4 text-blue-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -89,9 +89,9 @@
                 remaining
               </span>
             </div>
-            <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
               <div
-                class="h-3 rounded-full transition-all duration-500"
+                class="h-full rounded-full transition-all duration-500"
                 :class="monthlyProgressBarColor"
                 :style="{ width: monthlyProgressPercentage + '%' }"
               ></div>
@@ -111,7 +111,7 @@
             class="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2"
           >
             <svg
-              class="w-3 h-3 text-red-400 shrink-0"
+              class="w-5 h-5 text-red-400 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -151,7 +151,7 @@
               />
             </svg>
             After this batch:
-            {{ (monthlyRemaining - validEmails.length).toLocaleString() }} remaining this month
+            {{ Math.max(0, monthlyRemaining - validEmails.length).toLocaleString() }} remaining this month
           </div>
         </div>
       </div>
@@ -440,7 +440,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
         <!-- Sidebar: Campaign Monitor -->
         <div class="lg:col-span-1">
           <div
-            class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl sticky top-6"
+            class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl lg:sticky lg:top-6"
           >
             <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
               <svg
@@ -481,9 +481,9 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                       >{{ campaignProgress.percentage }}%</span
                     >
                   </div>
-                  <div class="w-full bg-slate-800 rounded-full h-2">
+                  <div class="w-full bg-slate-800 rounded-full h-2.5">
                     <div
-                      class="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
+                      class="bg-gradient-to-r from-blue-500 to-cyan-500 h-full rounded-full transition-all duration-500"
                       :style="{ width: campaignProgress.percentage + '%' }"
                     ></div>
                   </div>
@@ -602,7 +602,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
 
       <!-- Contact Footer -->
       <div class="max-w-5xl mx-auto mt-8">
-        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-3 text-center">
+        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 text-center">
           <div class="flex items-center justify-center gap-2 mb-2">
             <svg
               class="w-5 h-5 text-blue-400"
@@ -665,51 +665,22 @@ export default {
 
       pollInterval: null,
 
-      // Monthly limit tracking
-      monthlyLimit: 100000,
+      // Monthly limit tracking — synced with backend
+      monthlyLimit: 78957,
       monthlySent: 0,
-      monthlyRemaining: 100000,
-      showLimitWarning: false,
+      monthlyRemaining: 78957,
 
+      // Domain list — NO API keys exposed (backend handles auth)
       domains: [
-        
-        { domain: 'hyperlivee.com', apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM' },
-        { domain: 'lightlcai.com', apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb' },
-        { domain: 'lighterpe.com', apiKey: 're_Mfb6yKCe_Gw6kKKgjc2RFWGtaChTJME24' },
-
-
-        { domain: 'dexxhubb.com', apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc' },
-        { domain: 'dexeshed.xyz', apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx' },
-        { domain: 'shiftersed.com', apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t' },
-        { domain: 'endulane.com', apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT' },
-        { domain: 'craftsvent.com', apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5' },
-        { domain: 'vellosync.com', apiKey: 're_72MgFRQF_FM6FhKKpGue4QhX9xnavns8y' },
-      
-      
-
-        /* { domain: 'maulfaq.online', apiKey: 're_ECbt48yn_HvogtYFGCbgWcu4n8yN3RvMg' },
-          { domain: 'drivereduu.com', apiKey: 're_7exDDTfS_JyWwYLvPtfV3xwDBTSAHLB6M' },
-        { domain: 'eventfarmsss.com', apiKey: 're_eWTCwYgv_2ukTdehBUyRXxxTaVqSp9cJS' },
-        { domain: 'eventfullfarms.com', apiKey: 're_61UabbZs_3u1PzupgVERKvnu5FpKBEZrz' },
-        { domain: 'eventfarmeerrsz.com', apiKey: 're_JZHGz1tV_NK5UDDDnbMhqtMht4oJ7QxqE' },
-        { domain: 'eventfarm.ng', apiKey: 're_UuafV5Ku_4BzrNWvoPBkzusBtsJrkU7Hj' },
-        { domain: 'sendoraio.online', apiKey: 're_SDVENxgv_QBwRFHvDrkKKeujSBTdtxW2m' },
-        { domain: 'coredispatch.online', apiKey: 're_PfYXYHGA_PBTi4rf5tkFj13HKjdLtqZrg' },
-        { domain: 'mailnexio.online', apiKey: 're_Wt3xKfZ4_HrAU832Xwns5FTDVmGQE1zkW' },
-        // new domains
-        // { domain: 'btchyperlive.online', apiKey: 're_dHUprrHp_NHEeP69qL5hr5LZMUsm4FRFZ' },
-        { domain: 'vledem-yfaq.online', apiKey: 're_6h69FDEn_8qfRa9BuRzB56N4N4ovpj9GN' },
-        { domain: 'mailzillapro.online', apiKey: 're_M5WaWK4X_K5oCrkXhYuJVndKBPvXBMghy' },
-        { domain: 'hostmailerpro.online', apiKey: 're_6fQ79DPd_5k3XHyMX3DAw89nFecs35TmE' },
-        //  { domain: 'sendmailsx.online', apiKey: 're_FvchtvoQ_K5gGSCQTqchS5TjYCuJJxN9W' },
-        { domain: 'perfectmailer.online', apiKey: 're_TEhZoVrf_C3r2rMwnHhzRofFu8GL1riQ8' },
-        { domain: 'sendermailio.online', apiKey: 're_FxDaRfAH_6r8u8rpqCLHGgXT6n8MwmJAQ' },
-
-        //working
-        { domain: 'sendcrestt.com.ng', apiKey: 're_bCTgpp7g_MWGHt8X8VbdBQAvSTUwzTFGR' },
-        { domain: 'bitcoinhyperzzz.online', apiKey: 're_Vb79LShm_GgM1a9hf3rwq73nu16gcefdo' },
-        { domain: 'prolasun.online', apiKey: 're_3u9GsVp6_LhvvkbPpAFkj3kxwfFFLaiNy' },
-        { domain: 'eventfarmeerrsz.com', apiKey: 're_NnzeseQs_5HVXYGMx8YKdB1W7EUxDpB9n' }, */
+        { domain: 'lighterpe.com' },
+        { domain: 'lightlcai.com' },
+        { domain: 'hyperlivee.com' },
+        { domain: 'shiftersed.com' },
+        { domain: 'endulane.com' },
+        { domain: 'craftsvent.com' },
+        { domain: 'vellosync.com' },
+        { domain: 'dexeshed.xyz' },
+        { domain: 'dexxhubb.com' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -717,10 +688,6 @@ export default {
   },
 
   computed: {
-    selectedDomainObj() {
-      return this.domains.find((d) => d.domain === this.selectedDomain)
-    },
-
     computedFromEmail() {
       if (!this.fromName || !this.selectedDomain) return ''
       const clean = this.fromName.trim().toLowerCase().replace(/\s+/g, '')
@@ -758,7 +725,8 @@ export default {
         !this.selectedDomain ||
         !this.fromName.trim() ||
         !this.subject.trim() ||
-        !this.html.trim()
+        !this.html.trim() ||
+        this.monthlyRemaining <= 0
       )
     },
 
@@ -813,9 +781,6 @@ export default {
       if (completed >= total) return 'Complete!'
 
       // Only these statuses represent work still to be done
-      // distributed: in worker queues, being processed now
-      // pending: in main queue, waiting for distributor
-      // retry: will be re-queued soon
       const totalRemaining = pending + distributed + retry
 
       if (totalRemaining <= 0) return 'Finalizing...'
@@ -835,7 +800,10 @@ export default {
       if (mins === 0) return `${hours}h`
       return `${hours}h ${mins}m`
     },
-    onthlyProgressPercentage() {
+
+    // FIXED: was 'onthlyProgressPercentage' — missing 'm'
+    monthlyProgressPercentage() {
+      if (!this.monthlyLimit || this.monthlyLimit <= 0) return 0
       return Math.min(100, Math.round((this.monthlySent / this.monthlyLimit) * 100))
     },
 
@@ -856,17 +824,19 @@ export default {
     },
 
     wouldExceedLimit() {
+      if (!this.monthlyLimit) return false
       return this.monthlySent + this.validEmails.length > this.monthlyLimit
     },
 
     emailsThatCanBeSent() {
-      return Math.min(this.validEmails.length, this.monthlyLimit - this.monthlySent)
+      if (!this.monthlyLimit) return this.validEmails.length
+      return Math.max(0, Math.min(this.validEmails.length, this.monthlyLimit - this.monthlySent))
     },
   },
 
   mounted() {
     this.loadRecentCampaigns()
-    this.loadMonthlyStats() // ← stats checker
+    this.loadMonthlyStats()
   },
 
   beforeUnmount() {
@@ -889,10 +859,17 @@ export default {
       this.message = ''
 
       try {
+        // Check monthly limit before sending
+        if (this.wouldExceedLimit) {
+          throw new Error(
+            `Monthly limit exceeded. You can only send ${this.emailsThatCanBeSent} more emails this month.`
+          )
+        }
+
         const payload = {
           emails: this.validEmails,
-          subject: this.toSentenceCase(this.subject),
-          html: this.html,
+          subject: this.subject.trim(),
+          html: this.html.trim(),
           fromName: this.formattedFromName,
           fromEmail: this.computedFromEmail,
           domain: this.selectedDomain,
@@ -914,6 +891,7 @@ export default {
         // Start polling immediately with the new campaign ID
         this.startPolling(this.currentCampaignId)
         await this.loadRecentCampaigns()
+        await this.loadMonthlyStats() // Refresh monthly stats
       } catch (error) {
         console.error('❌ Error:', error)
         this.messageType = 'error'
@@ -933,7 +911,6 @@ export default {
       this.stopPolling()
       this.pollCampaignStatus(campaignId)
       this.pollInterval = setInterval(() => {
-        // Always use the latest currentCampaignId from instance
         if (this.currentCampaignId) {
           this.pollCampaignStatus(this.currentCampaignId)
         }
@@ -969,17 +946,19 @@ export default {
         this.campaignStats = data.stats || {}
         this.campaignProgress = data.progress || { total: 0, completed: 0, percentage: 0 }
 
+        // FIXED: Use currentCampaign data instead of undefined 'data.queued'
         if (data.progress && data.progress.percentage >= 100) {
           this.stopPolling()
           if (this.currentCampaign.notificationSent) {
             this.messageType = 'success'
             this.messageTitle = 'Campaign Complete!'
             this.message =
-              `${data.queued.toLocaleString()} emails queued. ` +
+              `${this.currentCampaign.totalEmails?.toLocaleString() || 'All'} emails processed. ` +
               `${this.monthlyRemaining.toLocaleString()} remaining this month. ` +
-              `Completion email will be sent to deliveryme69@gmail.com. ` +
+              `Completion email sent to deliveryme69@gmail.com. ` +
               `Questions? Contact support.`
           }
+          await this.loadMonthlyStats() // Refresh stats on completion
         }
       } catch (err) {
         console.error('Poll error:', err)
@@ -1067,8 +1046,8 @@ export default {
         const data = result.data || result
 
         this.monthlySent = data.sent || 0
-        this.monthlyLimit = data.limit || 100000
-        this.monthlyRemaining = data.remaining || 100000
+        this.monthlyLimit = data.limit || 78957
+        this.monthlyRemaining = data.remaining || 78957
       } catch (err) {
         console.error('Failed to load monthly stats:', err)
         // Fallback: calculate from recent campaigns
@@ -1092,7 +1071,8 @@ export default {
 
         const campaignMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         if (campaignMonthKey === currentMonthKey) {
-          sentThisMonth += campaign.totalEmails || 0
+          // FIXED: Count only successfully sent emails, not total queued
+          sentThisMonth += campaign.stats?.sent || campaign.totalEmails || 0
         }
       })
 
