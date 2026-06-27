@@ -672,8 +672,8 @@ export default {
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
-        { domain: 'solanexx.com ' },
         { domain: 'bestteamm.com' },
+        { domain: 'solanexx.com' },
         { domain: 'lighterpe.com' },
         { domain: 'lightlcai.com' },
         { domain: 'hyperlivee.com' },
