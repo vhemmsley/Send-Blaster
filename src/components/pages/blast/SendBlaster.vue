@@ -672,8 +672,8 @@ export default {
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
+        { domain: 'eventtapers.com' },
         { domain: 'bestteamm.com' },
-         { domain: 'maulfaq.online' },
         { domain: 'solanexx.com' },
         { domain: 'lighterpe.com' },
         { domain: 'lightlcai.com' },
@@ -684,6 +684,7 @@ export default {
         { domain: 'vellosync.com' },
         { domain: 'dexeshed.xyz' },
         { domain: 'dexxhubb.com' },
+        { domain: 'maulfaq.online' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
