@@ -679,9 +679,8 @@ export default {
         { domain: 'lighterpe.com' },
         { domain: 'lightlcai.com' },
         { domain: 'hyperlivee.com' },
-        { domain: 'dexxhubb.com' },
         { domain: 'maulfaq.online' },
-        { domain: 'humaniiity.com' },
+        
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,

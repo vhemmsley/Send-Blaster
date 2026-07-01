@@ -13,7 +13,7 @@ const DOMAIN_CONFIG = {
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
    'eventtapers.com': {
-    apiKey: 're_gZbotw5g_FFLKxozMUoMaMuJSQ7XcNeXs',
+    apiKey: 're_DRV3UjEb_DNmsFo1jVn2WoDWBxnktTiug',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'maulfaq.online': {
@@ -40,14 +40,7 @@ const DOMAIN_CONFIG = {
     apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'dexxhubb.com': {
-    apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'humaniiity.com': {
-      apiKey: 're_Crh7CdVh_G9FeA3DtUqtnDoSbN7aB8ANj',
-      notifyEmail: 'chandranbajrngi702@gmail.com',
-    },
+  
 }
 
 // Rate limiting configuration
