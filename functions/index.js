@@ -12,7 +12,11 @@ const DOMAIN_CONFIG = {
     apiKey: 're_HgsAgJzr_MaPWmStLaqLw3cdWGT8gz6dJ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-   'eventtapers.com': {
+  'humanityproo.com': {
+    apiKey: 're_VuRz2Ps6_JGp6mNuW3i9fFVvot9sVJW3z',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'eventtapers.com': {
     apiKey: 're_DRV3UjEb_DNmsFo1jVn2WoDWBxnktTiug',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
@@ -20,7 +24,7 @@ const DOMAIN_CONFIG = {
     apiKey: 're_TwPi24YN_8xw6viw6nHaRqqcy1bkAWMXY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-   'solanexx.com': {
+  'solanexx.com': {
     apiKey: 're_4UPq3e7z_NWr5jSeVWCjdqY3fZpmXZUom',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
@@ -40,7 +44,6 @@ const DOMAIN_CONFIG = {
     apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  
 }
 
 // Rate limiting configuration
@@ -62,9 +65,9 @@ const CONFIG = {
   HOURLY_TARGET: 3240,
 
   // Recovery settings
-  ORPHAN_THRESHOLD_MINUTES: 10,        // Increased from 3 to prevent race with active workers
+  ORPHAN_THRESHOLD_MINUTES: 10, // Increased from 3 to prevent race with active workers
   STUCK_DISTRIBUTED_THRESHOLD_MS: 10 * 60 * 1000, // 10 minutes
-  LOCK_TIMEOUT_MINUTES: 15,            // If a worker locks an email but doesn't finish
+  LOCK_TIMEOUT_MINUTES: 15, // If a worker locks an email but doesn't finish
 }
 
 admin.initializeApp()
@@ -287,7 +290,9 @@ async function runWorker(workerQueueName, workerName) {
       // Check if this email is still actually distributed to us
       const originalDoc = await originalRef.get()
       if (!originalDoc.exists) {
-        console.log(`⚠️ ${workerName}: Original doc ${originalDocId} gone, cleaning up worker queue`)
+        console.log(
+          `⚠️ ${workerName}: Original doc ${originalDocId} gone, cleaning up worker queue`,
+        )
         await doc.ref.delete()
         continue
       }
@@ -304,7 +309,9 @@ async function runWorker(workerQueueName, workerName) {
 
       // If not distributed or assigned to different worker, skip
       if (originalData.status !== 'distributed') {
-        console.log(`⚠️ ${workerName}: ${data.email} status=${originalData.status}, not distributed, skipping`)
+        console.log(
+          `⚠️ ${workerName}: ${data.email} status=${originalData.status}, not distributed, skipping`,
+        )
         await doc.ref.delete()
         skipped++
         continue
@@ -312,10 +319,17 @@ async function runWorker(workerQueueName, workerName) {
 
       // If another worker has locked it recently, skip
       if (originalData.lockedAt) {
-        const lockedAt = originalData.lockedAt.toDate ? originalData.lockedAt.toDate() : new Date(originalData.lockedAt)
+        const lockedAt = originalData.lockedAt.toDate
+          ? originalData.lockedAt.toDate()
+          : new Date(originalData.lockedAt)
         const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
-        if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES && originalData.lockedBy !== workerName) {
-          console.log(`⏳ ${workerName}: ${data.email} locked by ${originalData.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`)
+        if (
+          minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES &&
+          originalData.lockedBy !== workerName
+        ) {
+          console.log(
+            `⏳ ${workerName}: ${data.email} locked by ${originalData.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`,
+          )
           continue // Don't delete from queue, another worker is handling it
         }
       }
@@ -331,7 +345,7 @@ async function runWorker(workerQueueName, workerName) {
 
       if (!domainConfig) {
         console.error(`❌ ${workerName}: No config for domain ${data.domain}`)
-        
+
         // Atomic update: mark failed + remove from worker queue
         await db.runTransaction(async (t) => {
           t.update(originalRef, {
@@ -342,7 +356,7 @@ async function runWorker(workerQueueName, workerName) {
           })
           t.delete(doc.ref)
         })
-        
+
         failed++
         continue
       }
@@ -942,7 +956,9 @@ async function recoverOrphanedEmails() {
         const minutesSinceLock = (Date.now() - lockedAt.getTime()) / (60 * 1000)
         if (minutesSinceLock < CONFIG.LOCK_TIMEOUT_MINUTES) {
           recentlyLocked++
-          console.log(`⏳ Recovery: ${data.email} locked by ${data.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`)
+          console.log(
+            `⏳ Recovery: ${data.email} locked by ${data.lockedBy} ${Math.floor(minutesSinceLock)}m ago, skipping`,
+          )
           continue
         }
       }
@@ -1035,7 +1051,8 @@ async function recoverStuckDistributed() {
       }
 
       const distributedAt = data.distributedAt?.toDate?.() || null
-      const isOrphaned = !distributedAt || now - distributedAt.getTime() > CONFIG.STUCK_DISTRIBUTED_THRESHOLD_MS
+      const isOrphaned =
+        !distributedAt || now - distributedAt.getTime() > CONFIG.STUCK_DISTRIBUTED_THRESHOLD_MS
 
       if (isOrphaned) {
         const workerQueue = data.workerQueue
@@ -1222,216 +1239,165 @@ exports.getMonthlyStats = onCall(
   },
 )
 
-/*========================= EMAIL TEMPLATE (optional default) ========================= */
+// =========================
+// 10. GET CAMPAIGN EMAILS — Paginated fetch of all emails in a campaign
+// =========================
+exports.getCampaignEmails = onCall(
+  {
+    memory: '512MiB',
+    timeoutSeconds: 60,
+    maxInstances: 10,
+  },
+  async (request) => {
+    try {
+      const { campaignId, pageSize = 500, lastDocId } = request.data
 
-function buildAirdropClaimHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Your allocation is available</title>
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f7fa;
-    font-family: Arial, Helvetica, sans-serif;
-    color: #333333;
-  }
+      if (!campaignId) {
+        throw new HttpsError('invalid-argument', 'Campaign ID is required')
+      }
 
-  .container {
-    max-width: 600px;
-    margin: 0 auto;
-    background: #ffffff;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid #e5e7eb;
-  }
-  .preheader{
-display:none;
-max-height:0;
-overflow:hidden;
-opacity:0;
-mso-hide:all;
-}
-  .header {
-    background: #FF8C00;
-    text-align: center;
-    padding: 25px 20px;
-  }
+      let query = db
+        .collection('emailQueue')
+        .where('campaignId', '==', campaignId)
+        .orderBy('createdAt', 'desc')
+        .limit(Math.min(pageSize, 1000))
 
-  .header-logo {
-    display: block;
-    margin: 0 auto;
-    max-width: 280px;
-    width: 100%;
-    height: auto;
-  }
+      if (lastDocId) {
+        const lastDoc = await db.collection('emailQueue').doc(lastDocId).get()
+        if (lastDoc.exists) query = query.startAfter(lastDoc)
+      }
 
-  .content {
-    padding: 32px;
-    line-height: 1.7;
-  }
+      const snapshot = await query.get()
 
-  .button {
-    display: inline-block;
-    padding: 14px 28px;
-    background: #FF8C00;
-    color: #ffffff !important;
-    text-decoration: none;
-    border-radius: 8px;
-    font-weight: bold;
-  }
+      if (snapshot.empty) {
+        return { emails: [], totalFetched: 0, hasMore: false, lastDocId: null }
+      }
 
-  .notice {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 16px;
-    margin: 24px 0;
-  }
+      const emails = snapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          email: data.email,
+          status: data.status,
+          attempts: data.attempts || 0,
+          retryCount: data.retryCount || 0,
+          error: data.error || null,
+          createdAt: data.createdAt?.toDate?.() || null,
+          sentAt: data.sentAt?.toDate?.() || null,
+          lastAttempt: data.lastAttempt?.toDate?.() || null,
+          distributedAt: data.distributedAt?.toDate?.() || null,
+          workerQueue: data.workerQueue || null,
+        }
+      })
 
-  .footer {
-    padding: 24px;
-    text-align: center;
-    font-size: 12px;
-    color: #6b7280;
-    border-top: 1px solid #e5e7eb;
-  }
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1]
 
-  .footer a {
-    color: #6b7280;
-    text-decoration: none;
-  }
-</style>
-</head>
-<body>
+      // Check if more exist
+      const nextQuery = db
+        .collection('emailQueue')
+        .where('campaignId', '==', campaignId)
+        .orderBy('createdAt', 'desc')
+        .startAfter(lastDoc)
+        .limit(1)
+      const nextSnapshot = await nextQuery.get()
 
+      return {
+        emails,
+        totalFetched: emails.length,
+        hasMore: !nextSnapshot.empty,
+        lastDocId: lastDoc.id,
+      }
+    } catch (err) {
+      console.error('❌ getCampaignEmails error:', err)
+      throw new HttpsError('internal', err.message)
+    }
+  },
+)
 
-<div class="container">
+// =========================
+// 11. EXPORT CAMPAIGN EMAILS — Returns ALL emails as bulk data
+// =========================
+exports.exportCampaignEmails = onCall(
+  {
+    memory: '1GiB',
+    timeoutSeconds: 300,
+    maxInstances: 5,
+  },
+  async (request) => {
+    try {
+      const { campaignId } = request.data
+      if (!campaignId) throw new HttpsError('invalid-argument', 'Campaign ID required')
 
-  <div class="header">
+      const allEmails = []
+      let lastDocId = null
+      let hasMore = true
+      const batchSize = 1000
 
-    <img
-      src="https://bitcoinhyper.com/assets/images/svg-icons/logo.svg"
-      
-      alt="Bitcoin Hyper"
-      class="header-logo"
-    >
+      while (hasMore && allEmails.length < 50000) {
+        let query = db
+          .collection('emailQueue')
+          .where('campaignId', '==', campaignId)
+          .orderBy('createdAt', 'desc')
+          .limit(batchSize)
 
-  </div>
+        if (lastDocId) {
+          const lastDoc = await db.collection('emailQueue').doc(lastDocId).get()
+          if (lastDoc.exists) query = query.startAfter(lastDoc)
+        }
 
-  <div class="content">
+        const snapshot = await query.get()
+        if (snapshot.empty) {
+          hasMore = false
+          break
+        }
 
-    <p>Hello,</p>
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data()
+          allEmails.push({
+            email: data.email,
+            status: data.status,
+            attempts: data.attempts || 0,
+            retryCount: data.retryCount || 0,
+            error: data.error || '',
+            createdAt: data.createdAt?.toDate?.().toISOString() || '',
+            sentAt: data.sentAt?.toDate?.().toISOString() || '',
+            lastAttempt: data.lastAttempt?.toDate?.().toISOString() || '',
+            distributedAt: data.distributedAt?.toDate?.().toISOString() || '',
+            workerQueue: data.workerQueue || '',
+          })
+        })
 
-    <p>
-      We are reaching out regarding your Bitcoin Hyper allocation.
-    </p>
+        lastDocId = snapshot.docs[snapshot.docs.length - 1].id
 
-    <p>
-      The token distribution process has been completed and your allocation is now available for you to access through the Bitcoin Hyper portal.
-    </p>
+        const checkQuery = db
+          .collection('emailQueue')
+          .where('campaignId', '==', campaignId)
+          .orderBy('createdAt', 'desc')
+          .startAfter(snapshot.docs[snapshot.docs.length - 1])
+          .limit(1)
+        const checkSnapshot = await checkQuery.get()
+        hasMore = !checkSnapshot.empty
+      }
 
-    <div class="notice">
-      Please sign in using your wallet to verify your allocation and view your available tokens.
-    </div>
+      const campaignDoc = await db.collection('campaigns').doc(campaignId).get()
+      const campaignInfo = campaignDoc.exists ? campaignDoc.data() : {}
 
-    <p style="text-align:center;">
-      <a href="bitcoinhyperzz.xyz" class="button">
-        Open Dashboard
-      </a>
-    </p>
-
-    <p>
-      If you have already completed this process, no further action is required.
-    </p>
-
-    <p>
-      Thank you for your continued participation and support.
-    </p>
-
-    <p>
-      Regards,<br>
-      Bitcoin Hyper Team
-    </p>
-
-  </div>
-
-  <div class="footer">
-
-    <p><strong>All rights reserved. Bitcoin Hyper </strong></p>
-
-    <p>
-      Support:
-      <a>
-        support@bitcoinhyper.com
-      </a>
-    </p>
-
-    <p>
-      If you no longer wish to receive updates, you may unsubscribe from future communications.
-    </p>
-
-  </div>
-
-</div>
-</body>
-</html>`
-}
-
-function buildAirdropClaimText() {
-  const reference = 'N/A'
-  const userName = 'Valued Member'
-
-  const airdropAmount = '50,000'
-  const airdropToken = 'Centric Rise (CNR)'
-  const portalUrl = 'https://maulfaq.online/portal'
-  const supportUrl = 'https://maulfaq.online/support'
-  const unsubscribeUrl = 'https://maulfaq.online/unsubscribe'
-  const deadline = 'June 30, 2026'
-
-  return `Centric Rise — Distribution Update
-
-Hello ${userName},
-
-The Centric Rise distribution on the Solana network has been processed. As a verified participant, your allocation is ready for review.
-
-TOKEN ALLOCATION
-
-  Amount:    ${airdropAmount} ${airdropToken}
-  Allocation: Network transition distribution
-
-OPEN TOKEN PORTAL
-
-  ${portalUrl}
-
-Portal available through ${deadline}.
-
-PROCESS OVERVIEW
-
-1. Access your dashboard
-   (Compatible with Phantom, Solflare, or Backpack)
-
-2. Review your distribution status
-   Your legacy balance will be verified on-chain
-
-3. Receive your allocation
-   Tokens are sent directly to your connected wallet
-
-NOTE
-
-Allocations not reviewed by the deadline may be reallocated to the community pool. We recommend reviewing your status at your earliest convenience.
-
-Reference: ${reference}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Centric Rise | Solana Network
-
-Support: ${supportUrl}
-Unsubscribe: ${unsubscribeUrl}
-
-This is an automated message. Please do not reply.`
-}
+      return {
+        campaign: {
+          campaignId,
+          domain: campaignInfo.domain || '',
+          fromName: campaignInfo.fromName || '',
+          subject: campaignInfo.subject || '',
+          totalEmails: campaignInfo.totalEmails || allEmails.length,
+          status: campaignInfo.status || '',
+          createdAt: campaignInfo.createdAt?.toDate?.().toISOString() || '',
+        },
+        emails: allEmails,
+        total: allEmails.length,
+      }
+    } catch (err) {
+      console.error('❌ exportCampaignEmails error:', err)
+      throw new HttpsError('internal', err.message)
+    }
+  },
+)
