@@ -93,8 +93,7 @@
                 v-for="campaign in recentCampaigns.slice(0, 8)"
                 :key="campaign.id"
                 @click="
-                  campaignIdInput = campaign.campaignId || campaign.id
-                  loadCampaignEmails()
+                  ((campaignIdInput = campaign.campaignId || campaign.id), loadCampaignEmails())
                 "
                 class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors truncate max-w-xs"
                 :title="campaign.subject"
