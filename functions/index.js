@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'humanityproo.com': {
+    apiKey: 're_VuRz2Ps6_JGp6mNuW3i9fFVvot9sVJW3z',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
    'eventtapers.com': {
     apiKey: 're_gZbotw5g_FFLKxozMUoMaMuJSQ7XcNeXs',
     notifyEmail: 'chandranbajrngi702@gmail.com',
@@ -36,30 +40,14 @@ const DOMAIN_CONFIG = {
     apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'shiftersed.com': {
-    apiKey: 're_3ZNkXhRC_DBbwVKsN8BrzxDMmUV9VBN1t',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'endulane.com': {
-    apiKey: 're_UP4zWin5_MdePg3f5LZKtEd5uUXY5c3NT',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'craftsvent.com': {
-    apiKey: 're_dCaKD9nj_EfhsYAR7G22gd2F1BKRQQpd5',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'vellosync.com': {
-    apiKey: 're_72MgFRQF_FM6FhKKpGue4QhX9xnavns8y',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'dexeshed.xyz': {
-    apiKey: 're_1244TnMo_5151kCrQpvqFLHctEoUVxTvx',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
   'dexxhubb.com': {
     apiKey: 're_PWpD8vwn_LZ32pJ8anHQZRezQqr2fU3dc',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
+  'humaniiity.com': {
+      apiKey: 're_Crh7CdVh_G9FeA3DtUqtnDoSbN7aB8ANj',
+      notifyEmail: 'chandranbajrngi702@gmail.com',
+    },
 }
 
 // Rate limiting configuration
