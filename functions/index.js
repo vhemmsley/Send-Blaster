@@ -8,8 +8,8 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
-  'humanityproo.com': {
-    apiKey: 're_VuRz2Ps6_JGp6mNuW3i9fFVvot9sVJW3z',
+  'maskongoing.com': {
+    apiKey: 're_HgsAgJzr_MaPWmStLaqLw3cdWGT8gz6dJ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
    'eventtapers.com': {

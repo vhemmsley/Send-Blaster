@@ -672,6 +672,7 @@ export default {
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
+      { domain: 'maskongoing.com' },
         { domain: 'humanityproo.com' },
         { domain: 'eventtapers.com' },
         { domain: 'bestteamm.com' },
