@@ -8,6 +8,15 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'brick-ken.com': {
+    apiKey: 're_5AbpbUNf_8pywfrQ8orkf7Wp9drjXmVwK',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'lightchainwrap.com': {
+    apiKey: 're_9gF9Wko2_C6BtGQugmrd8BBkjGgBTMgTM',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+
   'maskongoing.com': {
     apiKey: 're_HgsAgJzr_MaPWmStLaqLw3cdWGT8gz6dJ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
@@ -26,22 +35,6 @@ const DOMAIN_CONFIG = {
   },
   'solanexx.com': {
     apiKey: 're_4UPq3e7z_NWr5jSeVWCjdqY3fZpmXZUom',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'bestteamm.com': {
-    apiKey: 're_5VEu34cN_LPU9TZcLmDT9Pv4JGoCmJKGA',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'lighterpe.com': {
-    apiKey: 're_Mfb6yKCe_Gw6kKKgjc2RFWGtaChTJME24',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'lightlcai.com': {
-    apiKey: 're_XtznT6p5_PQ7p1aaRfyUiFbyu5oQhFbWb',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'hyperlivee.com': {
-    apiKey: 're_HrXNVzbJ_8CRgcvqAuiYKTBg5siHtdXgM',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
@@ -815,7 +808,7 @@ exports.emailDistributor = onSchedule(
 exports.retryWorker = onSchedule(
   {
     schedule: 'every 5 minutes',
-    memory: '256MiB',
+    memory: '512MiB',
     timeoutSeconds: 300,
     maxInstances: 1,
   },
@@ -1244,7 +1237,7 @@ exports.getMonthlyStats = onCall(
 // =========================
 exports.getCampaignEmails = onCall(
   {
-    memory: '512MiB',
+    memory: '256MiB',
     timeoutSeconds: 60,
     maxInstances: 10,
   },
@@ -1319,7 +1312,7 @@ exports.getCampaignEmails = onCall(
 // =========================
 exports.exportCampaignEmails = onCall(
   {
-    memory: '1GiB',
+    memory: '256MiB',
     timeoutSeconds: 300,
     maxInstances: 5,
   },

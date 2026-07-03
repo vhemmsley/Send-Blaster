@@ -151,7 +151,8 @@
               />
             </svg>
             After this batch:
-            {{ Math.max(0, monthlyRemaining - validEmails.length).toLocaleString() }} remaining this month
+            {{ Math.max(0, monthlyRemaining - validEmails.length).toLocaleString() }} remaining this
+            month
           </div>
         </div>
       </div>
@@ -672,7 +673,9 @@ export default {
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
-      { domain: 'maskongoing.com' },
+        { domain: 'brick-ken.com' },
+        { domain: 'lightchainwrap.com' },
+        { domain: 'maskongoing.com' },
         { domain: 'humanityproo.com' },
         { domain: 'eventtapers.com' },
         { domain: 'bestteamm.com' },
@@ -681,7 +684,6 @@ export default {
         { domain: 'lightlcai.com' },
         { domain: 'hyperlivee.com' },
         { domain: 'maulfaq.online' },
-        
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -863,7 +865,7 @@ export default {
         // Check monthly limit before sending
         if (this.wouldExceedLimit) {
           throw new Error(
-            `Monthly limit exceeded. You can only send ${this.emailsThatCanBeSent} more emails this month.`
+            `Monthly limit exceeded. You can only send ${this.emailsThatCanBeSent} more emails this month.`,
           )
         }
 
