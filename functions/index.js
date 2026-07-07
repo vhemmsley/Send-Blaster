@@ -21,7 +21,7 @@ const DOMAIN_CONFIG = {
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lightoftheworldd.com': {
-    apiKey: 're_5AbpbUNf_8pywfrQ8orkf7Wp9drjXmVwK',
+    apiKey: 're_NDY5qq9w_AfQD899h8PGr2yafo7w3AFDC',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
@@ -1201,7 +1201,7 @@ exports.getMonthlyStats = onCall(
         sent = monthlyDoc.data().sent || 0
       }
 
-      const limit = 100000 // monthly resend limit
+      const limit = 50000 // monthly resend limit
       const remaining = Math.max(0, limit - sent)
       const percentage = Math.min(100, Math.round((sent / limit) * 100))
 
