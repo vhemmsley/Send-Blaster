@@ -8,33 +8,20 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
-  'brick-ken.com': {
+  'godoffrogs.com': {
+    apiKey: 're_Y9fyXEFc_3GfNcbx2PD3NqNYSAnV2xfkA',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'hyperszz.com': {
+    apiKey: 're_Grnb182h_3giLAGaXGvNti12dTfRx1Geb',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'lilpre.com': {
+    apiKey: 're_ZznmLd4J_AnJpsyGnug29gNsfzHvy8H9w',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'lightoftheworldd.com': {
     apiKey: 're_5AbpbUNf_8pywfrQ8orkf7Wp9drjXmVwK',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'lightchainwrap.com': {
-    apiKey: 're_9gF9Wko2_C6BtGQugmrd8BBkjGgBTMgTM',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-
-  'maskongoing.com': {
-    apiKey: 're_HgsAgJzr_MaPWmStLaqLw3cdWGT8gz6dJ',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'humanityproo.com': {
-    apiKey: 're_VuRz2Ps6_JGp6mNuW3i9fFVvot9sVJW3z',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'eventtapers.com': {
-    apiKey: 're_DRV3UjEb_DNmsFo1jVn2WoDWBxnktTiug',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'maulfaq.online': {
-    apiKey: 're_TwPi24YN_8xw6viw6nHaRqqcy1bkAWMXY',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'solanexx.com': {
-    apiKey: 're_4UPq3e7z_NWr5jSeVWCjdqY3fZpmXZUom',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
@@ -1214,7 +1201,7 @@ exports.getMonthlyStats = onCall(
         sent = monthlyDoc.data().sent || 0
       }
 
-      const limit = 78957 // monthly resend limit
+      const limit = 100000 // monthly resend limit
       const remaining = Math.max(0, limit - sent)
       const percentage = Math.min(100, Math.round((sent / limit) * 100))
 

@@ -667,23 +667,16 @@ export default {
       pollInterval: null,
 
       // Monthly limit tracking — synced with backend
-      monthlyLimit: 78957,
+      monthlyLimit: 50000,
       monthlySent: 0,
-      monthlyRemaining: 78957,
+      monthlyRemaining: 50000,
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
-        { domain: 'brick-ken.com' },
-        { domain: 'lightchainwrap.com' },
-        { domain: 'maskongoing.com' },
-        { domain: 'humanityproo.com' },
-        { domain: 'eventtapers.com' },
-        { domain: 'bestteamm.com' },
-        { domain: 'solanexx.com' },
-        { domain: 'lighterpe.com' },
-        { domain: 'lightlcai.com' },
-        { domain: 'hyperlivee.com' },
-        { domain: 'maulfaq.online' },
+        { domain: 'godoffrogs.com' },
+        { domain: 'hyperszz.com' },
+        { domain: 'lilpre.com' },
+        { domain: 'lightoftheworldd.com' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -1049,8 +1042,8 @@ export default {
         const data = result.data || result
 
         this.monthlySent = data.sent || 0
-        this.monthlyLimit = data.limit || 78957
-        this.monthlyRemaining = data.remaining || 78957
+        this.monthlyLimit = data.limit || 50000
+        this.monthlyRemaining = data.remaining || 50000
       } catch (err) {
         console.error('Failed to load monthly stats:', err)
         // Fallback: calculate from recent campaigns
