@@ -197,17 +197,19 @@
               <label class="block text-sm font-medium text-slate-300 mb-2">
                 From Name <span class="text-red-400">*</span>
               </label>
+              <!-- CHANGED: Added min-w-0 to flex container to prevent overflow -->
               <div
-                class="flex bg-slate-950 border border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+                class="flex min-w-0 bg-slate-950 border border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
               >
                 <input
                   v-model="fromName"
                   type="text"
                   placeholder="e.g. Team"
-                  class="flex-1 bg-transparent px-4 py-3 outline-none"
+                  class="flex-1 min-w-0 bg-transparent px-4 py-3 outline-none"
                 />
+                <!-- CHANGED: Added text-xs on mobile, sm:text-sm on larger screens, truncate to prevent overflow -->
                 <span
-                  class="flex items-center px-4 text-slate-500 text-sm border-l border-slate-700"
+                  class="flex items-center px-4 text-slate-500 text-xs sm:text-sm border-l border-slate-700 truncate max-w-[50%] sm:max-w-none"
                 >
                   @{{ selectedDomain || 'domain.com' }}
                 </span>
@@ -471,8 +473,66 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                     {{ displayCampaignStatus }}
                   </span>
                 </div>
+
+                <!-- CHANGED: Added Campaign ID with copy button -->
+                <div class="flex items-center gap-2 mb-2">
+                  <p
+                    class="text-xs font-mono bg-slate-800/50 px-2 py-1 rounded text-slate-400 truncate flex-1"
+                    :title="currentCampaign.campaignId || currentCampaignId"
+                  >
+                    ID: {{ currentCampaign.campaignId || currentCampaignId }}
+                  </p>
+                  <button
+                    @click="copyCampaignId"
+                    class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors shrink-0"
+                    :title="copySuccess ? 'Copied!' : 'Copy Campaign ID'"
+                  >
+                    <svg
+                      v-if="!copySuccess"
+                      class="w-3.5 h-3.5 text-slate-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <svg
+                      v-else
+                      class="w-3.5 h-3.5 text-green-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
                 <p class="font-semibold text-sm truncate">{{ currentCampaign.subject }}</p>
                 <p class="text-xs text-slate-500 mt-1">{{ currentCampaign.domain }}</p>
+
+                <!-- CHANGED: Added created date/time display -->
+                <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  {{ formatDate(currentCampaign.createdAt) }}
+                </p>
 
                 <!-- Progress Bar -->
                 <div class="mt-3">
@@ -579,6 +639,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                   <div class="flex justify-between items-start">
                     <div class="flex-1 min-w-0">
                       <p class="text-sm font-medium truncate">{{ campaign.subject }}</p>
+                      <!-- CHANGED: Fixed date display to use formatDate properly -->
                       <p class="text-xs text-slate-500">
                         {{ campaign.domain }} • {{ formatDate(campaign.createdAt) }}
                       </p>
@@ -665,6 +726,9 @@ export default {
       recentCampaigns: [],
 
       pollInterval: null,
+
+      // CHANGED: Added copySuccess for clipboard feedback
+      copySuccess: false,
 
       // Monthly limit tracking — synced with backend
       monthlyLimit: 50000,
@@ -797,7 +861,6 @@ export default {
       return `${hours}h ${mins}m`
     },
 
-    // FIXED: was 'onthlyProgressPercentage' — missing 'm'
     monthlyProgressPercentage() {
       if (!this.monthlyLimit || this.monthlyLimit <= 0) return 0
       return Math.min(100, Math.round((this.monthlySent / this.monthlyLimit) * 100))
@@ -850,6 +913,33 @@ export default {
         .join(' ')
     },
 
+    // CHANGED: Added copyCampaignId method
+    async copyCampaignId() {
+      const id = this.currentCampaign?.campaignId || this.currentCampaignId
+      if (!id) return
+
+      try {
+        await navigator.clipboard.writeText(id)
+        this.copySuccess = true
+        setTimeout(() => {
+          this.copySuccess = false
+        }, 2000)
+      } catch (err) {
+        console.error('Failed to copy campaign ID:', err)
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = id
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        this.copySuccess = true
+        setTimeout(() => {
+          this.copySuccess = false
+        }, 2000)
+      }
+    },
+
     async submitEmails() {
       this.loading = true
       this.message = ''
@@ -877,7 +967,7 @@ export default {
 
         console.log('✅ Campaign queued:', result)
 
-        // Firebase callable functions wrap response in result.data
+        // Firebase callable Functions wrap response in result.data
         const data = result.data || result
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
@@ -930,7 +1020,7 @@ export default {
         const result = await getCampaignStatus({ campaignId })
         console.log('Poll result:', result)
 
-        // Firebase callable functions wrap response in result.data
+        // Firebase callable Functions wrap response in result.data
         const data = result.data || result
 
         if (!data || !data.campaign) {
@@ -942,7 +1032,6 @@ export default {
         this.campaignStats = data.stats || {}
         this.campaignProgress = data.progress || { total: 0, completed: 0, percentage: 0 }
 
-        // FIXED: Use currentCampaign data instead of undefined 'data.queued'
         if (data.progress && data.progress.percentage >= 100) {
           this.stopPolling()
           if (this.currentCampaign.notificationSent) {
@@ -981,21 +1070,38 @@ export default {
       this.startPolling(this.currentCampaignId)
     },
 
+    // CHANGED: Improved formatDate to better handle all Firestore timestamp formats
     formatDate(timestamp) {
       if (!timestamp) return 'Unknown'
+
       try {
         let date
-        // Firestore Timestamp object
+
+        // Firestore Timestamp object with toDate()
         if (timestamp.toDate && typeof timestamp.toDate === 'function') {
           date = timestamp.toDate()
         }
-        // Firestore Timestamp with seconds/nanoseconds
-        else if (timestamp.seconds) {
-          date = new Date(timestamp.seconds * 1000)
+        // Firestore Timestamp with _seconds and _nanoseconds (newer SDK format)
+        else if (timestamp._seconds !== undefined) {
+          date = new Date(timestamp._seconds * 1000 + (timestamp._nanoseconds || 0) / 1000000)
         }
-        // ISO string or number
-        else {
+        // Firestore Timestamp with seconds/nanoseconds (older SDK format)
+        else if (timestamp.seconds !== undefined) {
+          date = new Date(timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000)
+        }
+        // ISO string
+        else if (typeof timestamp === 'string') {
           date = new Date(timestamp)
+        }
+        // Number (milliseconds)
+        else if (typeof timestamp === 'number') {
+          date = new Date(timestamp)
+        }
+        // Already a Date object
+        else if (timestamp instanceof Date) {
+          date = timestamp
+        } else {
+          return 'Unknown'
         }
 
         if (isNaN(date.getTime())) return 'Unknown'
@@ -1003,10 +1109,13 @@ export default {
         return date.toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
+          year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
+          hour12: true,
         })
       } catch (e) {
+        console.error('formatDate error:', e, 'timestamp:', timestamp)
         return 'Unknown'
       }
     },
