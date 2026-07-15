@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'pancakedexx.com': {
+    apiKey: 're_CymuFjhW_BahE8iDc1H8CKQr5gSbuGJr5',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
   'godoffrogs.com': {
     apiKey: 're_Y9fyXEFc_3GfNcbx2PD3NqNYSAnV2xfkA',
     notifyEmail: 'chandranbajrngi702@gmail.com',

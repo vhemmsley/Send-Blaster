@@ -737,6 +737,7 @@ export default {
 
       // Domain list — NO API keys exposed (backend handles auth)
       domains: [
+        { domain: 'pancakedexx.com' },
         { domain: 'godoffrogs.com' },
         { domain: 'hyperszz.com' },
         { domain: 'lilpre.com' },
