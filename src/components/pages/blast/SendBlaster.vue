@@ -770,7 +770,13 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
 </template>
 
 <script>
-import { sendBlaster, getCampaignStatus, getCampaigns, getMonthlyStats, triggerRecovery } from '@/firebase/firebase'
+import {
+  sendBlaster,
+  getCampaignStatus,
+  getCampaigns,
+  getMonthlyStats,
+  triggerRecovery,
+} from '@/firebase/firebase'
 
 export default {
   name: 'SendBlasterEnterprise',
@@ -841,8 +847,7 @@ export default {
 
     allEmails() {
       return this.emailInput
-        .split(/[
-,\s]+/)
+        .split(/[,\s]+/)
         .map((email) => email.trim())
         .filter((email) => email)
     },
@@ -1049,9 +1054,10 @@ export default {
         else campaignDate = new Date(createdAt)
 
         const minutesSince = (Date.now() - campaignDate.getTime()) / (60 * 1000)
-        const isCompleted = latestCampaign.status === 'completed' ||
-                           latestCampaign.notificationSent === true ||
-                           latestCampaign.completedAt
+        const isCompleted =
+          latestCampaign.status === 'completed' ||
+          latestCampaign.notificationSent === true ||
+          latestCampaign.completedAt
 
         if (!isCompleted && minutesSince > 30) {
           this.recoveryStatus = {
