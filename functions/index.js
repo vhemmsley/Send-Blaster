@@ -8,24 +8,28 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'maulfaq.com': {
+    apiKey: 're_ghRP2oaF_7EM6B5nu7CqTT6Vjz8RUXW2T',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
   'pancakedexx.com': {
-    apiKey: 're_bPmyyDDB_E9ziKovibuSZyFh6GrVMVFF6',
+    apiKey: 're_jcXp1xZp_GmSxYybyLYKLnVJavamkytNo',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'godoffrogs.com': {
-    apiKey: 're_Y9fyXEFc_3GfNcbx2PD3NqNYSAnV2xfkA',
+    apiKey: 're_9VznGRfC_3pWZbbo29uEL3x7dBctxKC1M',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'hyperszz.com': {
-    apiKey: 're_Grnb182h_3giLAGaXGvNti12dTfRx1Geb',
+    apiKey: 're_FCqX9inc_JegVmoXemyTi7y2j8k9q6pRT',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lilpre.com': {
-    apiKey: 're_ZznmLd4J_AnJpsyGnug29gNsfzHvy8H9w',
+    apiKey: 're_cRvWjbE7_LqZTzECk8hskYE7xs3zVqkoA',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lightoftheworldd.com': {
-    apiKey: 're_NDY5qq9w_AfQD899h8PGr2yafo7w3AFDC',
+    apiKey: 're_XjNaWvB8_9gqgTw21VWarhBkuQVENj2yD',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
@@ -149,7 +153,7 @@ async function sendSingleEmail(data, resend) {
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       Precedence: 'bulk',
       'X-Campaign-ID': data.campaignId,
-      'X-Mailer': 'Community',
+      'X-Mailer': 'SendBlaster-Enterprise/1.0',
     }
 
     const result = await resend.emails.send({
