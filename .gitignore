@@ -1,6 +1,9 @@
 node_modules
 dist
 .env
-functions/index.js
 .vscode
 
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.*.local

@@ -9,27 +9,27 @@ const admin = require('firebase-admin')
 
 const DOMAIN_CONFIG = {
   'maulfaq.com': {
-    apiKey: 're_7N16DVsm_6H8T9o6QHefHCELUFQAvAYqe',
+    apiKeyEnv: 'RESEND_KEY_MAULFAQ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'pancakedexx.com': {
-    apiKey: 're_brrs1t6v_9qHips3AAtEpQSUATiCaWcue',
+    apiKeyEnv: 'RESEND_KEY_PANCAKEDEXX',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'godoffrogs.com': {
-    apiKey: 're_8ZWiojK4_BocaLkmJavepaW4F554t4yqu',
+    apiKeyEnv: 'RESEND_KEY_GODOFFROGS',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'hyperszz.com': {
-    apiKey: 're_QeevRGdA_29nGP6whsg5AvRvNkR8jV15D',
+    apiKeyEnv: 'RESEND_KEY_HYPERSZZ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lilpre.com': {
-    apiKey: 're_giNC5GQb_KUaRizrvRNEZYEx8V1nMskLc',
+    apiKeyEnv: 'RESEND_KEY_LILPRE',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'lightoftheworldd.com': {
-    apiKey: 're_eK7aFp8b_Phw2W5a3CSqsWiyTE2VY5J9x',
+    apiKeyEnv: 'RESEND_KEY_LIGHTOFTHEWORLDD',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
@@ -47,6 +47,37 @@ const CONFIG = {
 
 admin.initializeApp()
 const db = admin.firestore()
+
+// =========================
+// API KEY MANAGEMENT (from env vars)
+// =========================
+
+// Cache for API keys so we don't re-read env vars repeatedly
+const apiKeyCache = {}
+
+function getApiKey(domain) {
+  const config = DOMAIN_CONFIG[domain]
+  if (!config) {
+    throw new Error(`No domain config for: ${domain}`)
+  }
+
+  if (apiKeyCache[domain]) {
+    return apiKeyCache[domain]
+  }
+
+  const apiKey = process.env[config.apiKeyEnv]
+  if (!apiKey) {
+    throw new Error(`Missing env var: ${config.apiKeyEnv} for domain ${domain}`)
+  }
+
+  apiKeyCache[domain] = apiKey
+  return apiKey
+}
+
+function getResendClient(domain) {
+  const apiKey = getApiKey(domain)
+  return new Resend(apiKey)
+}
 
 // =========================
 // CLOUD TASKS HELPER (using Firebase v2 task queues)
@@ -107,7 +138,7 @@ async function sendCompletionNotification(campaignId, domain, stats) {
       return { success: false, error: 'No domain config' }
     }
 
-    const resend = new Resend(config.apiKey)
+    const resend = getResendClient(domain)
     const notifyEmail = config.notifyEmail
 
     const htmlContent = `
@@ -332,7 +363,7 @@ async function runWorker(workerQueueName, workerName) {
         continue
       }
 
-      const resend = new Resend(domainConfig.apiKey)
+      const resend = getResendClient(data.domain)
       const result = await sendSingleEmail(data, resend)
 
       try {
@@ -902,6 +933,13 @@ exports.sendBlaster = onCall(
       }
       if (!fromEmail || !fromEmail.includes('@')) {
         throw new HttpsError('invalid-argument', 'Valid from email is required')
+      }
+
+      // Validate that the API key exists before queuing
+      try {
+        getApiKey(domain)
+      } catch (keyErr) {
+        throw new HttpsError('internal', keyErr.message)
       }
 
       if (typeof emails === 'string') {
