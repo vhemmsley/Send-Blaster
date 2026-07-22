@@ -16,20 +16,28 @@ const DOMAIN_CONFIG = {
     apiKeyEnv: 'RESEND_KEY_PANCAKEDEXX',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'godoffrogs.com': {
-    apiKeyEnv: 'RESEND_KEY_GODOFFROGS',
+  'humauity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMAUITY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'hyperszz.com': {
-    apiKeyEnv: 'RESEND_KEY_HYPERSZZ',
+  'humaulty.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMAULTY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'lilpre.com': {
-    apiKeyEnv: 'RESEND_KEY_LILPRE',
+  'humauty.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMAUTY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'lightoftheworldd.com': {
-    apiKeyEnv: 'RESEND_KEY_LIGHTOFTHEWORLDD',
+  'humpnity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMPNITY',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'humwnity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMWNITY',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'hunamity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUNAMITY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
