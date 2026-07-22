@@ -824,10 +824,12 @@ export default {
       domains: [
         { domain: 'maulfaq.com' },
         { domain: 'pancakedexx.com' },
-        { domain: 'godoffrogs.com' },
-        { domain: 'hyperszz.com' },
-        { domain: 'lilpre.com' },
-        { domain: 'lightoftheworldd.com' },
+        { domain: 'humauity.com' },
+        { domain: 'humaulty.com' },
+        { domain: 'humauty.com' },
+        { domain: 'humpnity.com' },
+        { domain: 'humwnity.com' },
+        { domain: 'hunamity.com' },
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
