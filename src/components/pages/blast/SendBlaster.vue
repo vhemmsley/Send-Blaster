@@ -822,6 +822,7 @@ export default {
 
       // Domain list
       domains: [
+        { domain: 'bookshophubs.com' },
         { domain: 'maulfaq.com' },
         { domain: 'pancakedexx.com' },
         { domain: 'humauity.com' },

@@ -8,6 +8,10 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'bookshophubs.com': {
+    apiKeyEnv: 'RESEND_KEY_BOOKSHOPHUBS',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
   'maulfaq.com': {
     apiKeyEnv: 'RESEND_KEY_MAULFAQ',
     notifyEmail: 'chandranbajrngi702@gmail.com',
