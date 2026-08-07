@@ -1,0 +1,27 @@
+[debug] [2026-08-07T12:48:07.131Z] ----------------------------------------------------------------------
+[debug] [2026-08-07T12:48:07.139Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\HP\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions
+[debug] [2026-08-07T12:48:07.140Z] CLI Version:   15.19.1
+[debug] [2026-08-07T12:48:07.140Z] Platform:      win32
+[debug] [2026-08-07T12:48:07.140Z] Node Version:  v24.12.0
+[debug] [2026-08-07T12:48:07.141Z] Time:          Sat Aug 08 2026 01:48:07 GMT+1300 (GMT+13:00)
+[debug] [2026-08-07T12:48:07.141Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-07T12:48:19.718Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-07T12:48:19.719Z] > authorizing via signed-in user (deliveryme69@gmail.com)
+[debug] [2026-08-07T12:48:19.720Z] [iam] checking project send-blaster for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-08-07T12:48:19.728Z] Checked if tokens are valid: false, expires at: 1786106462374
+[debug] [2026-08-07T12:48:19.729Z] Checked if tokens are valid: false, expires at: 1786106462374
+[debug] [2026-08-07T12:48:19.730Z] > refreshing access token with scopes: []
+[debug] [2026-08-07T12:48:19.738Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-08-07T12:48:19.739Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-07T12:48:20.386Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-08-07T12:48:20.387Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-07T12:48:20.452Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/send-blaster:testIamPermissions [none]
+[debug] [2026-08-07T12:48:20.452Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/send-blaster:testIamPermissions  x-goog-user-project=send-blaster
+[debug] [2026-08-07T12:48:20.453Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/send-blaster:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-07T12:48:21.648Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/send-blaster:testIamPermissions 200
+[debug] [2026-08-07T12:48:21.648Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/send-blaster:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-07T12:48:21.649Z] Checked if tokens are valid: true, expires at: 1786110499387
+[debug] [2026-08-07T12:48:21.650Z] Checked if tokens are valid: true, expires at: 1786110499387
+[debug] [2026-08-07T12:48:21.650Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/send-blaster/serviceAccounts/send-blaster@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-08-07T12:48:21.650Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/send-blaster/serviceAccounts/send-blaster@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
