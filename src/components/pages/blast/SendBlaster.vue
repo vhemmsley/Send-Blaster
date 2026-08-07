@@ -822,15 +822,18 @@ export default {
 
       // Domain list
       domains: [
+        { domain: 'brickbybric.com' },
+        { domain: 'lgihtchain.com' },
+        { domain: 'hypeitt.com' },
         { domain: 'bookshophubs.com' },
         { domain: 'maulfaq.com' },
         { domain: 'pancakedexx.com' },
-        { domain: 'humauity.com' },
-        { domain: 'humaulty.com' },
         { domain: 'humauty.com' },
-        { domain: 'humpnity.com' },
         { domain: 'humwnity.com' },
-        { domain: 'hunamity.com' },
+         /*  { domain: 'humauity.com' },
+        { domain: 'humaulty.com' },
+         { domain: 'humpnity.com' },
+        { domain: 'hunamity.com' }, */
       ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,

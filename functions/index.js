@@ -8,6 +8,18 @@ const admin = require('firebase-admin')
 // =========================
 
 const DOMAIN_CONFIG = {
+  'brickbybric.com': {
+    apiKeyEnv: 'RESEND_KEY_BRICKBYBRIC',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'lgihtchain.com': {
+    apiKeyEnv: 'RESEND_KEY_LGIHTCHAIN',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'hypeitt.com': {
+    apiKeyEnv: 'RESEND_KEY_HYPEITT',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
   'bookshophubs.com': {
     apiKeyEnv: 'RESEND_KEY_BOOKSHOPHUBS',
     notifyEmail: 'chandranbajrngi702@gmail.com',
@@ -20,28 +32,31 @@ const DOMAIN_CONFIG = {
     apiKeyEnv: 'RESEND_KEY_PANCAKEDEXX',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'humauity.com': {
+  /* 'humauity.com': {
     apiKeyEnv: 'RESEND_KEY_HUMAUITY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
   'humaulty.com': {
     apiKeyEnv: 'RESEND_KEY_HUMAULTY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
+  }, 
+  
+   'humpnity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUMPNITY',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
   },
+  
+  'hunamity.com': {
+    apiKeyEnv: 'RESEND_KEY_HUNAMITY',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  */
   'humauty.com': {
     apiKeyEnv: 'RESEND_KEY_HUMAUTY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
-  'humpnity.com': {
-    apiKeyEnv: 'RESEND_KEY_HUMPNITY',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
   'humwnity.com': {
     apiKeyEnv: 'RESEND_KEY_HUMWNITY',
-    notifyEmail: 'chandranbajrngi702@gmail.com',
-  },
-  'hunamity.com': {
-    apiKeyEnv: 'RESEND_KEY_HUNAMITY',
     notifyEmail: 'chandranbajrngi702@gmail.com',
   },
 }
