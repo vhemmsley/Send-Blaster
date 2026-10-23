@@ -821,20 +821,7 @@ export default {
       monthlyRemaining: 50000,
 
       // Domain list
-      domains: [
-        { domain: 'brickbybric.com' },
-        { domain: 'lgihtchain.com' },
-        { domain: 'hypeitt.com' },
-        { domain: 'bookshophubs.com' },
-        { domain: 'maulfaq.com' },
-        { domain: 'pancakedexx.com' },
-        { domain: 'humauty.com' },
-        { domain: 'humwnity.com' },
-         /*  { domain: 'humauity.com' },
-        { domain: 'humaulty.com' },
-         { domain: 'humpnity.com' },
-        { domain: 'hunamity.com' }, */
-      ],
+      domains: [{ domain: 'brickbybric.com' }, { domain: 'lgihtchain.com' }],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     }
