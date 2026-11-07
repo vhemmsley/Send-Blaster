@@ -821,7 +821,12 @@ export default {
       monthlyRemaining: 50000,
 
       // Domain list
-      domains: [{ domain: 'brickbybric.com' }, { domain: 'lgihtchain.com' }],
+      domains: [
+        { domain: 'remittixlive.com' },
+        { domain: 'coretechk.com' },
+        { domain: 'brickbybric.com' },
+        { domain: 'lgihtchain.com' },
+      ],
 
       emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     }

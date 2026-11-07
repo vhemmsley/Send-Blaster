@@ -6,8 +6,17 @@ const admin = require('firebase-admin')
 // =========================
 // ENTERPRISE CONFIGURATION
 // =========================
+RESEND_KEY_REMITTIXLIVE
 
 const DOMAIN_CONFIG = {
+  'remittixlive.com': {
+    apiKeyEnv: 'RESEND_KEY_REMITTIXLIVE',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
+  'coretechk.com': {
+    apiKeyEnv: 'RESEND_KEY_CORETECHK',
+    notifyEmail: 'chandranbajrngi702@gmail.com',
+  },
   'brickbybric.com': {
     apiKeyEnv: 'RESEND_KEY_BRICKBYBRIC',
     notifyEmail: 'chandranbajrngi702@gmail.com',
