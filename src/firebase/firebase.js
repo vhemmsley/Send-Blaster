@@ -23,3 +23,4 @@ export const getCampaignEmails = httpsCallable(functions, 'getCampaignEmails')
 export const exportCampaignEmails = httpsCallable(functions, 'exportCampaignEmails')
 
 export const triggerRecovery = httpsCallable(functions, 'triggerRecovery')
+export const activateUsageCycle = httpsCallable(functions, 'activateUsageCycle')
