@@ -1417,8 +1417,6 @@ exports.sendBlaster = onCall(
   },
   async (request) => {
     try {
-      if (!request.auth)
-        throw new HttpsError('unauthenticated', 'Sign in before creating a campaign.')
       let { emails, subject, html, fromName, fromEmail, domain } = request.data
 
       if (!domain || !DOMAIN_CONFIG[domain]) {
@@ -1685,8 +1683,6 @@ exports.getMonthlyStats = onCall(
 exports.activateUsageCycle = onCall(
   { memory: '256MiB', timeoutSeconds: 30, maxInstances: 1 },
   async (request) => {
-    if (!request.auth)
-      throw new HttpsError('unauthenticated', 'Sign in to activate a sending cycle.')
     const restart = Boolean(request.data?.restart)
     const now = admin.firestore.Timestamp.now()
     const cycleId = `cycle_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
@@ -1728,7 +1724,7 @@ exports.activateUsageCycle = onCall(
         reservedCount: 0,
         cycleStartedAt: now,
         cycleEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        activatedBy: request.auth.uid,
+        activatedBy: 'manual',
         createdAt: now,
       })
       tx.set(
