@@ -2,11 +2,11 @@ const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https')
 const { onTaskDispatched } = require('firebase-functions/v2/tasks')
 const { Resend } = require('resend')
 const admin = require('firebase-admin')
+const crypto = require('crypto')
 
 // =========================
 // ENTERPRISE CONFIGURATION
 // =========================
-RESEND_KEY_REMITTIXLIVE
 
 const DOMAIN_CONFIG = {
   'remittixlive.com': {
@@ -117,6 +117,117 @@ function isValidEmail(email) {
   return regex.test(email)
 }
 
+// Rolling 30-day usage is enforced by Firestore transactions, never by the UI.
+const USAGE_LIMIT = 100000
+const USAGE_SETTINGS_REF = () => db.collection('systemSettings').doc('emailUsage')
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex')
+}
+
+function getUnsubscribeUrl(token) {
+  const base = process.env.UNSUBSCRIBE_BASE_URL
+  if (!base)
+    throw new Error('Missing UNSUBSCRIBE_BASE_URL (public HTTPS URL of the unsubscribe function)')
+  return `${base.replace(/\/$/, '')}?token=${encodeURIComponent(token)}`
+}
+
+function appendUnsubscribeFooter(html, token) {
+  const url = getUnsubscribeUrl(token)
+  const footer = `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:12px;color:#6b7280;text-align:center;">If you no longer wish to receive these emails, <a href="${url}" style="color:#6b7280;text-decoration:underline;">unsubscribe here</a>.</div>`
+  return `${html}\n${footer}`
+}
+
+async function reserveUsageSlot(queueId) {
+  return db.runTransaction(async (tx) => {
+    const reservationRef = db.collection('usageReservations').doc(queueId)
+    const reservationSnap = await tx.get(reservationRef)
+    if (reservationSnap.exists && reservationSnap.data().status === 'reserved')
+      return reservationSnap.data().cycleId
+    if (reservationSnap.exists && reservationSnap.data().status === 'accepted') {
+      throw new Error('This recipient already has a provider-accepted send recorded.')
+    }
+    const settingsRef = USAGE_SETTINGS_REF()
+    const settingsSnap = await tx.get(settingsRef)
+    const cycleId = settingsSnap.exists ? settingsSnap.data().activeCycleId : null
+    if (!cycleId)
+      throw new Error('No active 30-day sending cycle. Activate a cycle before sending.')
+    const cycleRef = db.collection('usageCycles').doc(cycleId)
+    const cycleSnap = await tx.get(cycleRef)
+    if (!cycleSnap.exists) throw new Error('Active usage cycle record is missing.')
+    const cycle = cycleSnap.data()
+    const endMs = cycle.cycleEndsAt?.toMillis
+      ? cycle.cycleEndsAt.toMillis()
+      : new Date(cycle.cycleEndsAt).getTime()
+    if (cycle.status !== 'active' || !Number.isFinite(endMs) || Date.now() >= endMs) {
+      throw new Error('The 30-day sending cycle has expired. Activate a new cycle to continue.')
+    }
+    const accepted = Number(cycle.acceptedCount || 0)
+    const reserved = Number(cycle.reservedCount || 0)
+    if (accepted + reserved >= USAGE_LIMIT)
+      throw new Error('The 100,000-email cycle allowance has been reached.')
+    tx.update(cycleRef, {
+      reservedCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    tx.set(reservationRef, {
+      queueId,
+      cycleId,
+      status: 'reserved',
+      reservedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    return cycleId
+  })
+}
+
+async function releaseUsageReservation(cycleId, queueId) {
+  if (!cycleId || !queueId) return
+  await db.runTransaction(async (tx) => {
+    const reservationRef = db.collection('usageReservations').doc(queueId)
+    const reservationSnap = await tx.get(reservationRef)
+    if (
+      !reservationSnap.exists ||
+      reservationSnap.data().status !== 'reserved' ||
+      reservationSnap.data().cycleId !== cycleId
+    )
+      return
+    const cycleRef = db.collection('usageCycles').doc(cycleId)
+    const cycleSnap = await tx.get(cycleRef)
+    if (cycleSnap.exists && Number(cycleSnap.data().reservedCount || 0) > 0) {
+      tx.update(cycleRef, {
+        reservedCount: admin.firestore.FieldValue.increment(-1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    }
+    tx.update(reservationRef, {
+      status: 'released',
+      releasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  })
+}
+
+function verifyResendWebhook(req) {
+  const secret = process.env.RESEND_WEBHOOK_SECRET
+  if (!secret) throw new Error('RESEND_WEBHOOK_SECRET is not configured')
+  const id = req.get('svix-id')
+  const timestamp = req.get('svix-timestamp')
+  const signature = req.get('svix-signature')
+  if (!id || !timestamp || !signature || !req.rawBody) return false
+  const timestampSeconds = Number(timestamp)
+  if (!Number.isFinite(timestampSeconds) || Math.abs(Date.now() / 1000 - timestampSeconds) > 300)
+    return false
+  const signedContent = `${id}.${timestamp}.${req.rawBody.toString('utf8')}`
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64')
+  const expected = crypto.createHmac('sha256', key).update(signedContent).digest('base64')
+  return signature.split(' ').some((part) => {
+    const candidate = part.split(',')[1]
+    if (!candidate) return false
+    const a = Buffer.from(candidate)
+    const b = Buffer.from(expected)
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
+  })
+}
+
 // =========================
 // NOTIFICATION SYSTEM
 // =========================
@@ -172,8 +283,9 @@ async function sendCompletionNotification(campaignId, domain, stats) {
 
 async function sendSingleEmail(data, resend) {
   try {
+    const unsubscribeUrl = getUnsubscribeUrl(data.unsubscribeToken)
     const headers = {
-      'List-Unsubscribe': `<https://${data.domain}/unsubscribe?email=${encodeURIComponent(data.email)}>`,
+      'List-Unsubscribe': `<${unsubscribeUrl}>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       Precedence: 'bulk',
       'X-Campaign-ID': data.campaignId,
@@ -184,15 +296,33 @@ async function sendSingleEmail(data, resend) {
       from: `${data.fromName} <${data.fromEmail}>`,
       to: data.email,
       subject: data.subject,
-      html: data.html,
+      html: appendUnsubscribeFooter(data.html, data.unsubscribeToken),
       headers,
     })
+    if (result?.error) {
+      return {
+        success: false,
+        email: data.email,
+        error: result.error.message || 'Resend rejected the message.',
+      }
+    }
+    const resendId = result?.data?.id || result?.id
+    if (!resendId) {
+      return {
+        success: false,
+        ambiguous: true,
+        email: data.email,
+        error:
+          'Resend response did not include a message ID; manual reconciliation is required before retrying.',
+      }
+    }
 
-    console.log(`✅ Sent to ${data.email} [${data.campaignId}]`)
-    return { success: true, email: data.email, resendId: result?.id }
+    console.log(`✅ Provider accepted ${data.email} [${data.campaignId}]`)
+    return { success: true, email: data.email, resendId }
   } catch (err) {
     console.error(`❌ Failed to send to ${data.email}:`, err.message)
-    return { success: false, email: data.email, error: err.message }
+    const ambiguous = !err.statusCode || Number(err.statusCode) >= 500
+    return { success: false, ambiguous, email: data.email, error: err.message }
   }
 }
 
@@ -338,9 +468,70 @@ async function runWorker(workerQueueName, workerName) {
         lockedBy: workerName,
       })
 
+      // Backfill unsubscribe tokens for queue records created before this release.
+      if (!data.unsubscribeToken) {
+        const legacyToken = crypto.randomBytes(32).toString('hex')
+        const legacyTokenHash = sha256(legacyToken)
+        data.unsubscribeToken = legacyToken
+        data.unsubscribeTokenHash = legacyTokenHash
+        const legacyBatch = db.batch()
+        legacyBatch.set(db.collection('unsubscribeTokens').doc(legacyTokenHash), {
+          email: data.email,
+          campaignId: data.campaignId,
+          tokenHash: legacyTokenHash,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          active: true,
+        })
+        legacyBatch.update(originalRef, {
+          unsubscribeToken: legacyToken,
+          unsubscribeTokenHash: legacyTokenHash,
+        })
+        legacyBatch.update(doc.ref, {
+          unsubscribeToken: legacyToken,
+          unsubscribeTokenHash: legacyTokenHash,
+        })
+        await legacyBatch.commit()
+      }
+
+      // Check the suppression list immediately before delivery.
+      const suppressionSnap = await db.collection('suppressionList').doc(sha256(data.email)).get()
+      if (suppressionSnap.exists) {
+        await db.runTransaction(async (t) => {
+          t.update(originalRef, {
+            status: 'suppressed',
+            suppressionReason: suppressionSnap.data().reason || 'Previously opted out',
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lockedAt: admin.firestore.FieldValue.delete(),
+            lockedBy: admin.firestore.FieldValue.delete(),
+          })
+          t.delete(doc.ref)
+        })
+        skipped++
+        continue
+      }
+
+      let reservedCycleId
+      try {
+        reservedCycleId = await reserveUsageSlot(originalDocId)
+      } catch (usageErr) {
+        await db.runTransaction(async (t) => {
+          t.update(originalRef, {
+            status: 'blocked',
+            error: usageErr.message,
+            lockedAt: admin.firestore.FieldValue.delete(),
+            lockedBy: admin.firestore.FieldValue.delete(),
+          })
+          t.delete(doc.ref)
+        })
+        failed++
+        hasFailures = true
+        continue
+      }
+
       const domainConfig = DOMAIN_CONFIG[data.domain]
 
       if (!domainConfig) {
+        await releaseUsageReservation(reservedCycleId, originalDocId)
         console.error(`❌ No config for domain ${data.domain}`)
         await db.runTransaction(async (t) => {
           t.update(originalRef, {
@@ -356,8 +547,13 @@ async function runWorker(workerQueueName, workerName) {
         continue
       }
 
-      const resend = getResendClient(data.domain)
-      const result = await sendSingleEmail(data, resend)
+      let result
+      try {
+        const resend = getResendClient(data.domain)
+        result = await sendSingleEmail(data, resend)
+      } catch (sendSetupError) {
+        result = { success: false, ambiguous: false, error: sendSetupError.message }
+      }
 
       try {
         await db.runTransaction(async (t) => {
@@ -375,6 +571,41 @@ async function runWorker(workerQueueName, workerName) {
           }
 
           if (result.success) {
+            const ledgerRef = result.resendId
+              ? db.collection('usageLedger').doc(result.resendId)
+              : db.collection('usageLedger').doc(originalDocId)
+            const ledgerSnap = await t.get(ledgerRef)
+            const reservationRef = db.collection('usageReservations').doc(originalDocId)
+            const reservationSnap = await t.get(reservationRef)
+            const cycleRef = db.collection('usageCycles').doc(reservedCycleId)
+            if (!ledgerSnap.exists) {
+              t.set(ledgerRef, {
+                resendId: result.resendId || null,
+                emailQueueId: originalDocId,
+                campaignId: freshData.campaignId,
+                cycleId: reservedCycleId,
+                acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+              t.update(cycleRef, {
+                ...(reservationSnap.exists && reservationSnap.data().status === 'reserved'
+                  ? { reservedCount: admin.firestore.FieldValue.increment(-1) }
+                  : {}),
+                acceptedCount: admin.firestore.FieldValue.increment(1),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+            } else if (reservationSnap.exists && reservationSnap.data().status === 'reserved') {
+              t.update(cycleRef, {
+                reservedCount: admin.firestore.FieldValue.increment(-1),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+            }
+            if (reservationSnap.exists && reservationSnap.data().status !== 'accepted') {
+              t.update(reservationRef, {
+                status: 'accepted',
+                resendId: result.resendId || null,
+                acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+            }
             t.update(originalRef, {
               status: 'sent',
               sentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -387,11 +618,31 @@ async function runWorker(workerQueueName, workerName) {
             })
             sent++
           } else {
+            const cycleRef = db.collection('usageCycles').doc(reservedCycleId)
+            const reservationRef = db.collection('usageReservations').doc(originalDocId)
+            const reservationSnap = await t.get(reservationRef)
+            const cycleSnap = await t.get(cycleRef)
+            if (
+              !result.ambiguous &&
+              reservationSnap.exists &&
+              reservationSnap.data().status === 'reserved' &&
+              cycleSnap.exists &&
+              Number(cycleSnap.data().reservedCount || 0) > 0
+            ) {
+              t.update(cycleRef, {
+                reservedCount: admin.firestore.FieldValue.increment(-1),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+              t.update(reservationRef, {
+                status: 'released',
+                releasedAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+            }
             const currentAttempts = (freshData.attempts || 0) + 1
-            const shouldRetry = currentAttempts < CONFIG.MAX_RETRIES
+            const shouldRetry = !result.ambiguous && currentAttempts < CONFIG.MAX_RETRIES
 
             t.update(originalRef, {
-              status: shouldRetry ? 'pending_retry' : 'failed',
+              status: result.ambiguous ? 'unknown' : shouldRetry ? 'pending_retry' : 'failed',
               error: result.error,
               attempts: currentAttempts,
               lastAttempt: admin.firestore.FieldValue.serverTimestamp(),
@@ -407,13 +658,91 @@ async function runWorker(workerQueueName, workerName) {
         })
       } catch (txErr) {
         console.error(`❌ Transaction failed for ${data.email}:`, txErr.message)
-        try {
-          await originalRef.update({
-            lockedAt: admin.firestore.FieldValue.delete(),
-            lockedBy: admin.firestore.FieldValue.delete(),
-          })
-        } catch (unlockErr) {
-          console.error(`❌ Failed to unlock ${data.email}:`, unlockErr.message)
+        if (result.success) {
+          // The provider accepted the email. Retry the accounting transaction; never blindly resend.
+          try {
+            await db.runTransaction(async (t) => {
+              const queueSnap = await t.get(originalRef)
+              const ledgerRef = db.collection('usageLedger').doc(result.resendId)
+              const ledgerSnap = await t.get(ledgerRef)
+              const reservationRef = db.collection('usageReservations').doc(originalDocId)
+              const reservationSnap = await t.get(reservationRef)
+              const cycleRef = db.collection('usageCycles').doc(reservedCycleId)
+              if (!queueSnap.exists) return
+              if (!ledgerSnap.exists) {
+                t.set(ledgerRef, {
+                  resendId: result.resendId,
+                  emailQueueId: originalDocId,
+                  campaignId: data.campaignId,
+                  cycleId: reservedCycleId,
+                  acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                })
+                t.update(cycleRef, {
+                  ...(reservationSnap.exists && reservationSnap.data().status === 'reserved'
+                    ? { reservedCount: admin.firestore.FieldValue.increment(-1) }
+                    : {}),
+                  acceptedCount: admin.firestore.FieldValue.increment(1),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                })
+              } else if (reservationSnap.exists && reservationSnap.data().status === 'reserved') {
+                t.update(cycleRef, {
+                  reservedCount: admin.firestore.FieldValue.increment(-1),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                })
+              }
+              if (reservationSnap.exists && reservationSnap.data().status !== 'accepted') {
+                t.update(reservationRef, {
+                  status: 'accepted',
+                  resendId: result.resendId,
+                  acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                })
+              }
+              t.update(originalRef, {
+                status: 'sent',
+                sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                sentEmailId: result.resendId,
+                lockedAt: admin.firestore.FieldValue.delete(),
+                lockedBy: admin.firestore.FieldValue.delete(),
+                reconciliationRequired: false,
+              })
+              t.delete(doc.ref)
+            })
+            sent++
+          } catch (reconcileErr) {
+            console.error(
+              'Accepted-send reconciliation failed; marking unknown to prevent resend:',
+              reconcileErr.message,
+            )
+            await originalRef.set(
+              {
+                status: 'unknown',
+                error:
+                  'Provider accepted the message but Firestore accounting could not be reconciled. Do not resend until manually reviewed.',
+                reconciliationRequired: true,
+                sentEmailId: result.resendId,
+                lockedAt: admin.firestore.FieldValue.delete(),
+                lockedBy: admin.firestore.FieldValue.delete(),
+              },
+              { merge: true },
+            )
+            await doc.ref.delete()
+            failed++
+            hasFailures = true
+          }
+        } else {
+          try {
+            await releaseUsageReservation(reservedCycleId, originalDocId)
+          } catch (releaseErr) {
+            console.error('Usage reservation release failed:', releaseErr.message)
+          }
+          try {
+            await originalRef.update({
+              lockedAt: admin.firestore.FieldValue.delete(),
+              lockedBy: admin.firestore.FieldValue.delete(),
+            })
+          } catch (unlockErr) {
+            console.error(`❌ Failed to unlock ${data.email}:`, unlockErr.message)
+          }
         }
       }
 
@@ -517,7 +846,7 @@ async function checkCampaignCompletion() {
   try {
     const pendingSnapshot = await db
       .collection('emailQueue')
-      .where('status', 'in', ['pending', 'pending_retry', 'distributed'])
+      .where('status', 'in', ['pending', 'pending_retry', 'distributed', 'unknown'])
       .limit(1)
       .get()
 
@@ -897,6 +1226,184 @@ exports.emailRecovery = onTaskDispatched(
   },
 )
 
+// Public unsubscribe endpoint. GET displays a confirmation page; POST performs RFC 8058 one-click opt-out.
+exports.unsubscribe = onRequest(async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  const token = String(req.query.token || req.body?.token || '').trim()
+  if (!token || token.length > 256) return res.status(400).send('Invalid unsubscribe link.')
+  const tokenHash = sha256(token)
+  const tokenRef = db.collection('unsubscribeTokens').doc(tokenHash)
+  try {
+    const tokenSnap = await tokenRef.get()
+    if (!tokenSnap.exists)
+      return res.status(404).send('This unsubscribe link is invalid or has expired.')
+    const record = tokenSnap.data()
+    const suppressionRef = db.collection('suppressionList').doc(sha256(record.email))
+    if (!record.active) {
+      const suppressed = await suppressionRef.get()
+      return suppressed.exists
+        ? res.status(200).send('You have been unsubscribed.')
+        : res.status(404).send('This unsubscribe link has expired.')
+    }
+    const isOneClick = req.method === 'POST'
+    if (isOneClick) {
+      await db.runTransaction(async (tx) => {
+        tx.set(
+          suppressionRef,
+          {
+            email: record.email,
+            reason: 'unsubscribe',
+            source: 'recipient_unsubscribe',
+            campaignId: record.campaignId || null,
+            tokenHash,
+            suppressedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        tx.update(tokenRef, { active: false, usedAt: admin.firestore.FieldValue.serverTimestamp() })
+      })
+      return res.status(200).send('You have been unsubscribed.')
+    }
+    if (req.method !== 'GET') return res.status(405).send('Method not allowed.')
+    return res
+      .status(200)
+      .type('html')
+      .send(
+        `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unsubscribe</title></head><body style="font-family:Arial,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#111827"><h2>Unsubscribe from these emails?</h2><p>Confirm below to stop receiving further emails from this sender.</p><form method="POST"><input type="hidden" name="token" value="${token.replace(/[&<>"']/g, '')}"><button style="padding:12px 18px;background:#111827;color:white;border:0;border-radius:8px;cursor:pointer">Confirm unsubscribe</button></form></body></html>`,
+      )
+  } catch (err) {
+    console.error('Unsubscribe endpoint error:', err)
+    return res.status(500).send('Unable to process your request right now.')
+  }
+})
+
+// Resend webhook: deduplicates Svix event IDs and suppresses hard bounces/complaints.
+exports.resendWebhook = onRequest(async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).send('Method not allowed.')
+  try {
+    if (!verifyResendWebhook(req)) return res.status(401).send('Invalid webhook signature.')
+    const eventId = req.get('svix-id')
+    const eventRef = db.collection('emailEvents').doc(eventId)
+    const existing = await eventRef.get()
+    if (existing.exists) return res.status(200).send('Already processed.')
+    const payload = req.body || {}
+    const eventType = payload.type || 'unknown'
+    const eventData = payload.data || {}
+    const email = String(
+      Array.isArray(eventData.to) ? eventData.to[0] : eventData.to || eventData.email || '',
+    )
+      .trim()
+      .toLowerCase()
+    const providerEmailId = eventData.email_id || eventData.id
+    const matchingQueue = providerEmailId
+      ? await db.collection('emailQueue').where('sentEmailId', '==', providerEmailId).limit(1).get()
+      : null
+    await db.runTransaction(async (tx) => {
+      const eventSnap = await tx.get(eventRef)
+      if (eventSnap.exists) return
+      const matchedQueueRef =
+        matchingQueue && !matchingQueue.empty ? matchingQueue.docs[0].ref : null
+      const matchedQueueSnap = matchedQueueRef ? await tx.get(matchedQueueRef) : null
+      const deliveryStatus =
+        eventType === 'email.delivered'
+          ? 'delivered'
+          : eventType === 'email.bounced'
+            ? 'bounced'
+            : eventType === 'email.complained'
+              ? 'complained'
+              : null
+      let ledgerRef = null
+      let ledgerSnap = null
+      let reservationRef = null
+      let reservationSnap = null
+      let cycleRef = null
+      let cycleSnap = null
+      if (matchedQueueSnap?.exists && providerEmailId) {
+        const queueData = matchedQueueSnap.data()
+        ledgerRef = db.collection('usageLedger').doc(providerEmailId)
+        ledgerSnap = await tx.get(ledgerRef)
+        reservationRef = db.collection('usageReservations').doc(matchedQueueRef.id)
+        reservationSnap = await tx.get(reservationRef)
+        if (reservationSnap.exists && reservationSnap.data().cycleId) {
+          cycleRef = db.collection('usageCycles').doc(reservationSnap.data().cycleId)
+          cycleSnap = await tx.get(cycleRef)
+        }
+      }
+      tx.set(eventRef, {
+        eventId,
+        type: eventType,
+        email: email || null,
+        receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      if (matchedQueueSnap?.exists && deliveryStatus) {
+        tx.update(matchedQueueRef, {
+          deliveryStatus,
+          ...(matchedQueueSnap.data().status === 'unknown'
+            ? {
+                status: 'sent',
+                sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                reconciliationRequired: false,
+              }
+            : {}),
+          lastProviderEventAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        if (ledgerRef && !ledgerSnap.exists) {
+          tx.set(ledgerRef, {
+            resendId: providerEmailId,
+            emailQueueId: matchedQueueRef.id,
+            campaignId: matchedQueueSnap.data().campaignId,
+            cycleId: reservationSnap?.data()?.cycleId || null,
+            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+            reconciledFromWebhook: true,
+          })
+          if (cycleSnap?.exists) {
+            tx.update(cycleRef, {
+              ...(reservationSnap.exists && reservationSnap.data().status === 'reserved'
+                ? { reservedCount: admin.firestore.FieldValue.increment(-1) }
+                : {}),
+              acceptedCount: admin.firestore.FieldValue.increment(1),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+          }
+        } else if (
+          reservationSnap?.exists &&
+          reservationSnap.data().status === 'reserved' &&
+          cycleSnap?.exists
+        ) {
+          tx.update(cycleRef, {
+            reservedCount: admin.firestore.FieldValue.increment(-1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+        }
+        if (reservationSnap?.exists && reservationSnap.data().status === 'reserved') {
+          tx.update(reservationRef, {
+            status: 'accepted',
+            resendId: providerEmailId,
+            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+        }
+      }
+      if (email && (eventType === 'email.bounced' || eventType === 'email.complained')) {
+        tx.set(
+          db.collection('suppressionList').doc(sha256(email)),
+          {
+            email,
+            reason: eventType === 'email.complained' ? 'complaint' : 'bounce',
+            source: 'resend_webhook',
+            providerEventId: eventId,
+            suppressedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+      }
+    })
+    return res.status(200).send('Webhook processed.')
+  } catch (err) {
+    console.error('Resend webhook error:', err)
+    return res.status(500).send('Webhook processing failed.')
+  }
+})
+
 // =========================
 // CALLABLE FUNCTIONS
 // =========================
@@ -905,11 +1412,13 @@ exports.emailRecovery = onTaskDispatched(
 exports.sendBlaster = onCall(
   {
     memory: '512MiB',
-    timeoutSeconds: 60,
+    timeoutSeconds: 540,
     maxInstances: 10,
   },
   async (request) => {
     try {
+      if (!request.auth)
+        throw new HttpsError('unauthenticated', 'Sign in before creating a campaign.')
       let { emails, subject, html, fromName, fromEmail, domain } = request.data
 
       if (!domain || !DOMAIN_CONFIG[domain]) {
@@ -938,6 +1447,12 @@ exports.sendBlaster = onCall(
       if (typeof emails === 'string') {
         emails = emails.split(/[\n,\s]+/)
       }
+      if (!Array.isArray(emails)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Emails must be provided as a list or newline-separated text.',
+        )
+      }
 
       const validEmails = emails.map(sanitizeEmail).filter((e) => e && isValidEmail(e))
       const invalidEmails = emails.map(sanitizeEmail).filter((e) => e && !isValidEmail(e))
@@ -946,12 +1461,17 @@ exports.sendBlaster = onCall(
         throw new HttpsError('invalid-argument', 'No valid emails provided')
       }
 
+      if (!process.env.UNSUBSCRIBE_BASE_URL) {
+        throw new HttpsError(
+          'failed-precondition',
+          'UNSUBSCRIBE_BASE_URL must be configured before sending.',
+        )
+      }
+      validEmails = [...new Set(validEmails)]
       const campaignId = generateCampaignId(domain)
-      const batch = db.batch()
       const timestamp = admin.firestore.FieldValue.serverTimestamp()
-
       const campaignRef = db.collection('campaigns').doc(campaignId)
-      batch.set(campaignRef, {
+      await campaignRef.set({
         campaignId,
         domain,
         fromName,
@@ -964,36 +1484,39 @@ exports.sendBlaster = onCall(
         notificationSent: false,
       })
 
-      validEmails.forEach((email) => {
-        const ref = db.collection('emailQueue').doc()
-        batch.set(ref, {
-          email,
-          subject,
-          html,
-          campaignId,
-          fromName,
-          fromEmail,
-          domain,
-          status: 'pending',
-          attempts: 0,
-          retryCount: 0,
-          createdAt: timestamp,
+      // Each recipient creates a queue doc and token doc; 200 recipients = 400 writes, below Firestore's 500-write limit.
+      for (let offset = 0; offset < validEmails.length; offset += 200) {
+        const batch = db.batch()
+        const chunk = validEmails.slice(offset, offset + 200)
+        chunk.forEach((email) => {
+          const ref = db.collection('emailQueue').doc()
+          const unsubscribeToken = crypto.randomBytes(32).toString('hex')
+          const tokenHash = sha256(unsubscribeToken)
+          batch.set(db.collection('unsubscribeTokens').doc(tokenHash), {
+            email,
+            campaignId,
+            tokenHash,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            active: true,
+          })
+          batch.set(ref, {
+            email,
+            unsubscribeToken,
+            unsubscribeTokenHash: tokenHash,
+            subject,
+            html,
+            campaignId,
+            fromName,
+            fromEmail,
+            domain,
+            status: 'pending',
+            attempts: 0,
+            retryCount: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
         })
-      })
-
-      await batch.commit()
-
-      const now = new Date()
-      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const monthlyRef = db.collection('monthlyStats').doc(currentMonthKey)
-      await monthlyRef.set(
-        {
-          sent: admin.firestore.FieldValue.increment(validEmails.length),
-          month: currentMonthKey,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      )
+        await batch.commit()
+      }
 
       // 🚀 TRIGGER DISTRIBUTOR via Firebase Task Queue
       const enqueueResult = await enqueueTask(
@@ -1012,10 +1535,11 @@ exports.sendBlaster = onCall(
         campaignId,
         queued: validEmails.length,
         invalid: invalidEmails.length,
-        message: `Campaign queued. Sending at ~${CONFIG.HOURLY_TARGET}/hour.`,
+        message: `Campaign queued for processing. Sending is subject to your active 30-day allowance and suppression checks.`,
       }
     } catch (err) {
       console.error('❌ sendBlaster error:', err)
+      if (err instanceof HttpsError) throw err
       throw new HttpsError('internal', err.message)
     }
   },
@@ -1042,23 +1566,45 @@ exports.getCampaignStatus = onCall(
 
       const stats = await db.collection('emailQueue').where('campaignId', '==', campaignId).get()
 
-      const statusCounts = { pending: 0, sent: 0, failed: 0, pending_retry: 0, distributed: 0 }
+      const statusCounts = {
+        pending: 0,
+        sent: 0,
+        failed: 0,
+        pending_retry: 0,
+        distributed: 0,
+        suppressed: 0,
+        blocked: 0,
+        unknown: 0,
+      }
+      const deliveryCounts = { delivered: 0, bounced: 0, complained: 0 }
       stats.docs.forEach((doc) => {
-        const status = doc.data().status
-        if (statusCounts[status] !== undefined) {
-          statusCounts[status]++
-        }
+        const row = doc.data()
+        const status = row.status
+        if (statusCounts[status] !== undefined) statusCounts[status]++
+        if (deliveryCounts[row.deliveryStatus] !== undefined) deliveryCounts[row.deliveryStatus]++
       })
 
       return {
         campaign: campaignDoc.data(),
         stats: statusCounts,
+        delivery: deliveryCounts,
         progress: {
           total: stats.size,
-          completed: statusCounts.sent + statusCounts.failed,
+          completed:
+            statusCounts.sent +
+            statusCounts.failed +
+            statusCounts.suppressed +
+            statusCounts.blocked,
           percentage:
             stats.size > 0
-              ? Math.round(((statusCounts.sent + statusCounts.failed) / stats.size) * 100)
+              ? Math.round(
+                  ((statusCounts.sent +
+                    statusCounts.failed +
+                    statusCounts.suppressed +
+                    statusCounts.blocked) /
+                    stats.size) *
+                    100,
+                )
               : 0,
         },
       }
@@ -1090,31 +1636,108 @@ exports.getCampaigns = onCall(
 
 // 9. GET MONTHLY STATS
 exports.getMonthlyStats = onCall(
-  {
-    memory: '256MiB',
-    timeoutSeconds: 30,
-    maxInstances: 10,
-  },
-  async (request) => {
+  { memory: '256MiB', timeoutSeconds: 30, maxInstances: 10 },
+  async () => {
     try {
-      const now = new Date()
-      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const monthlyDoc = await db.collection('monthlyStats').doc(currentMonthKey).get()
-
-      let sent = 0
-      if (monthlyDoc.exists) {
-        sent = monthlyDoc.data().sent || 0
+      const settingsSnap = await USAGE_SETTINGS_REF().get()
+      const cycleId = settingsSnap.exists ? settingsSnap.data().activeCycleId : null
+      if (!cycleId)
+        return {
+          active: false,
+          sent: 0,
+          limit: USAGE_LIMIT,
+          remaining: USAGE_LIMIT,
+          percentage: 0,
+          cycle: null,
+          history: [],
+        }
+      const cycleSnap = await db.collection('usageCycles').doc(cycleId).get()
+      const cycle = cycleSnap.exists ? cycleSnap.data() : null
+      const historySnap = await db
+        .collection('usageCycles')
+        .orderBy('createdAt', 'desc')
+        .limit(12)
+        .get()
+      const sent = Number(cycle?.acceptedCount || 0)
+      const limit = Number(cycle?.allowance || USAGE_LIMIT)
+      const reserved = Number(cycle?.reservedCount || 0)
+      const remaining = Math.max(0, limit - sent - reserved)
+      return {
+        active: Boolean(
+          cycle && cycle.status === 'active' && cycle.cycleEndsAt?.toMillis?.() > Date.now(),
+        ),
+        sent,
+        reserved,
+        limit,
+        remaining,
+        percentage: limit ? Math.min(100, Math.round((sent / limit) * 100)) : 0,
+        cycle: cycle ? { ...cycle, id: cycleId } : null,
+        history: historySnap.docs.map((d) => ({ id: d.id, ...d.data() })),
       }
-
-      const limit = 50000
-      const remaining = Math.max(0, limit - sent)
-      const percentage = Math.min(100, Math.round((sent / limit) * 100))
-
-      return { currentMonth: currentMonthKey, sent, limit, remaining, percentage }
     } catch (err) {
       console.error('❌ getMonthlyStats error:', err)
       throw new HttpsError('internal', err.message)
     }
+  },
+)
+
+// Manually activate or restart a rolling 30-day allowance. Restarting closes, never overwrites, history.
+exports.activateUsageCycle = onCall(
+  { memory: '256MiB', timeoutSeconds: 30, maxInstances: 1 },
+  async (request) => {
+    if (!request.auth)
+      throw new HttpsError('unauthenticated', 'Sign in to activate a sending cycle.')
+    const restart = Boolean(request.data?.restart)
+    const now = admin.firestore.Timestamp.now()
+    const cycleId = `cycle_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
+    const cycleRef = db.collection('usageCycles').doc(cycleId)
+    await db.runTransaction(async (tx) => {
+      const settingsRef = USAGE_SETTINGS_REF()
+      const settingsSnap = await tx.get(settingsRef)
+      const oldId = settingsSnap.exists ? settingsSnap.data().activeCycleId : null
+      if (oldId && !restart) {
+        const oldRef = db.collection('usageCycles').doc(oldId)
+        const oldSnap = await tx.get(oldRef)
+        if (oldSnap.exists) {
+          const old = oldSnap.data()
+          const oldEnd = old.cycleEndsAt?.toMillis?.() || 0
+          if (old.status === 'active' && oldEnd > Date.now()) {
+            throw new HttpsError(
+              'failed-precondition',
+              'A cycle is already active. Confirm restart to begin a fresh 30-day cycle.',
+            )
+          }
+        }
+      }
+      if (oldId) {
+        const oldRef = db.collection('usageCycles').doc(oldId)
+        const oldSnap = await tx.get(oldRef)
+        if (oldSnap.exists && oldSnap.data().status === 'active') {
+          tx.update(oldRef, {
+            status: 'closed',
+            closedAt: admin.firestore.FieldValue.serverTimestamp(),
+            closeReason: restart ? 'manual_restart' : 'expired',
+          })
+        }
+      }
+      tx.set(cycleRef, {
+        cycleId,
+        status: 'active',
+        allowance: USAGE_LIMIT,
+        acceptedCount: 0,
+        reservedCount: 0,
+        cycleStartedAt: now,
+        cycleEndsAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        activatedBy: request.auth.uid,
+        createdAt: now,
+      })
+      tx.set(
+        settingsRef,
+        { activeCycleId: cycleId, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true },
+      )
+    })
+    return { success: true, cycleId, limit: USAGE_LIMIT, durationDays: 30 }
   },
 )
 

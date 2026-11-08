@@ -50,7 +50,7 @@
         </div>
       </div>
 
-      <!-- Monthly Limit Counter -->
+      <!-- Rolling 30-day usage counter -->
       <div class="max-w-5xl mx-auto mb-4 sm:mb-6">
         <div
           class="bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl"
@@ -70,9 +70,11 @@
                   d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                 />
               </svg>
-              <h3 class="text-xs sm:text-sm font-semibold text-slate-300">Monthly Sending Limit</h3>
+              <h3 class="text-xs sm:text-sm font-semibold text-slate-300">
+                30-Day Sending Allowance
+              </h3>
             </div>
-            <span class="text-xs text-slate-500">Resets 1st of each month</span>
+            <span class="text-xs text-slate-500">Manually activated · rolling 30 days</span>
           </div>
 
           <!-- Progress Bar -->
@@ -82,7 +84,7 @@
                 <span class="font-bold" :class="monthlyProgressColor">{{
                   monthlySent.toLocaleString()
                 }}</span>
-                sent
+                provider-accepted
               </span>
               <span class="text-slate-400">
                 <span class="font-bold text-white">{{ monthlyRemaining.toLocaleString() }}</span>
@@ -126,8 +128,8 @@
             <div class="text-xs sm:text-sm">
               <span class="text-red-400 font-semibold">Limit Warning:</span>
               <span class="text-red-300">
-                This batch ({{ validEmails.length.toLocaleString() }}) exceeds your monthly limit.
-                Only {{ emailsThatCanBeSent.toLocaleString() }} can be sent.
+                This batch exceeds the remaining 30-day allowance. Only
+                {{ emailsThatCanBeSent.toLocaleString() }} can be sent.
               </span>
             </div>
           </div>
@@ -151,8 +153,56 @@
               />
             </svg>
             After this batch:
-            {{ Math.max(0, monthlyRemaining - validEmails.length).toLocaleString() }} remaining this
-            month
+            {{ Math.max(0, monthlyRemaining - validEmails.length).toLocaleString() }} remaining in
+            this cycle
+          </div>
+          <div
+            class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3"
+          >
+            <div class="text-xs text-slate-400">
+              <span v-if="cycleActive && usageCycle">
+                Cycle ends {{ formatDate(usageCycle.cycleEndsAt) }} ·
+                {{ Number(usageCycle.reservedCount || 0).toLocaleString() }} reserved
+              </span>
+              <span v-else>No active sending cycle. Activate one before queueing a campaign.</span>
+            </div>
+            <div class="flex gap-2">
+              <button
+                v-if="!cycleActive"
+                type="button"
+                @click="activateCycle(false)"
+                :disabled="cycleActionLoading"
+                class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {{ cycleActionLoading ? 'Activating…' : 'Activate 30-day cycle' }}
+              </button>
+              <button
+                v-else
+                type="button"
+                @click="activateCycle(true)"
+                :disabled="cycleActionLoading"
+                class="rounded-lg border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-50"
+              >
+                {{ cycleActionLoading ? 'Restarting…' : 'Restart cycle' }}
+              </button>
+            </div>
+          </div>
+          <div v-if="usageCycleHistory.length > 1" class="mt-3 border-t border-slate-800 pt-3">
+            <p class="mb-2 text-xs font-semibold text-slate-400">Previous cycles</p>
+            <div
+              v-for="pastCycle in previousUsageCycles"
+              :key="pastCycle.id"
+              class="flex flex-wrap justify-between gap-2 py-1 text-xs text-slate-500"
+            >
+              <span
+                >{{ formatDate(pastCycle.cycleStartedAt) }} –
+                {{ formatDate(pastCycle.cycleEndsAt) }}</span
+              >
+              <span
+                >{{ Number(pastCycle.acceptedCount || 0).toLocaleString() }} accepted ·
+                {{ pastCycle.status }}</span
+              >
+            </div>
           </div>
         </div>
       </div>
@@ -629,7 +679,7 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                   <div
                     class="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center"
                   >
-                    <p class="text-xs text-green-400">Sent</p>
+                    <p class="text-xs text-green-400">Provider accepted</p>
                     <p class="text-lg font-bold text-green-400">{{ campaignStats.sent || 0 }}</p>
                   </div>
                   <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
@@ -659,6 +709,21 @@ john@gmail.com, sarah@yahoo.com, mike@hotmail.com"
                     <p class="text-lg font-bold text-orange-400">
                       {{ campaignStats.pending_retry || 0 }}
                     </p>
+                  </div>
+                </div>
+
+                <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+                  <div class="rounded-lg bg-slate-800/70 p-2">
+                    <p class="text-[11px] text-slate-400">Delivered</p>
+                    <p class="font-semibold text-emerald-400">{{ deliveryStats.delivered || 0 }}</p>
+                  </div>
+                  <div class="rounded-lg bg-slate-800/70 p-2">
+                    <p class="text-[11px] text-slate-400">Bounced</p>
+                    <p class="font-semibold text-red-400">{{ deliveryStats.bounced || 0 }}</p>
+                  </div>
+                  <div class="rounded-lg bg-slate-800/70 p-2">
+                    <p class="text-[11px] text-slate-400">Complaints</p>
+                    <p class="font-semibold text-amber-400">{{ deliveryStats.complained || 0 }}</p>
                   </div>
                 </div>
 
@@ -775,6 +840,7 @@ import {
   getCampaignStatus,
   getCampaigns,
   getMonthlyStats,
+  activateUsageCycle,
   triggerRecovery,
 } from '@/firebase/firebase'
 
@@ -798,6 +864,7 @@ export default {
       currentCampaignId: null,
       currentCampaign: null,
       campaignStats: {},
+      deliveryStats: { delivered: 0, bounced: 0, complained: 0 },
       campaignProgress: { total: 0, completed: 0, percentage: 0 },
       recentCampaigns: [],
 
@@ -815,10 +882,14 @@ export default {
       },
       recoveryLoading: false,
 
-      // Monthly limit tracking
-      monthlyLimit: 50000,
+      // Rolling 30-day usage tracking
+      monthlyLimit: 100000,
       monthlySent: 0,
-      monthlyRemaining: 50000,
+      monthlyRemaining: 100000,
+      cycleActive: false,
+      usageCycle: null,
+      usageCycleHistory: [],
+      cycleActionLoading: false,
 
       // Domain list
       domains: [
@@ -833,6 +904,12 @@ export default {
   },
 
   computed: {
+    previousUsageCycles() {
+      return this.usageCycleHistory
+        .filter((item) => item.id !== (this.usageCycle && this.usageCycle.id))
+        .slice(0, 3)
+    },
+
     computedFromEmail() {
       if (!this.fromName || !this.selectedDomain) return ''
       const clean = this.fromName.trim().toLowerCase().replace(/\s+/g, '')
@@ -871,7 +948,8 @@ export default {
         !this.fromName.trim() ||
         !this.subject.trim() ||
         !this.html.trim() ||
-        this.monthlyRemaining <= 0
+        this.monthlyRemaining <= 0 ||
+        !this.cycleActive
       )
     },
 
@@ -962,12 +1040,12 @@ export default {
 
     wouldExceedLimit() {
       if (!this.monthlyLimit) return false
-      return this.monthlySent + this.validEmails.length > this.monthlyLimit
+      return this.validEmails.length > this.monthlyRemaining
     },
 
     emailsThatCanBeSent() {
       if (!this.monthlyLimit) return this.validEmails.length
-      return Math.max(0, Math.min(this.validEmails.length, this.monthlyLimit - this.monthlySent))
+      return Math.max(0, Math.min(this.validEmails.length, this.monthlyRemaining))
     },
   },
 
@@ -1115,7 +1193,7 @@ export default {
       try {
         if (this.wouldExceedLimit) {
           throw new Error(
-            `Monthly limit exceeded. You can only send ${this.emailsThatCanBeSent} more emails this month.`,
+            `30-day cycle allowance exceeded. You can only send ${this.emailsThatCanBeSent} more emails in this cycle.`,
           )
         }
 
@@ -1138,7 +1216,7 @@ export default {
         this.currentCampaignId = data.campaignId
         this.messageType = 'success'
         this.messageTitle = 'Campaign Queued Successfully!'
-        this.message = `${data.queued} emails queued. Sending at ~3240/hour rate. You will receive a completion email at deliveryme69@gmail.com`
+        this.message = `${data.queued} recipient records queued. Usage is counted only when the provider accepts an email.`
 
         this.startPolling(this.currentCampaignId)
         await this.loadRecentCampaigns()
@@ -1194,6 +1272,7 @@ export default {
 
         this.currentCampaign = data.campaign
         this.campaignStats = data.stats || {}
+        this.deliveryStats = data.delivery || { delivered: 0, bounced: 0, complained: 0 }
         this.campaignProgress = data.progress || { total: 0, completed: 0, percentage: 0 }
 
         if (data.progress && data.progress.percentage >= 100) {
@@ -1203,7 +1282,7 @@ export default {
             this.messageTitle = 'Campaign Complete!'
             this.message =
               `${this.currentCampaign.totalEmails?.toLocaleString() || 'All'} emails processed. ` +
-              `${this.monthlyRemaining.toLocaleString()} remaining this month. ` +
+              `${this.monthlyRemaining.toLocaleString()} remaining in this cycle. ` +
               `Completion email sent to deliveryme69@gmail.com. ` +
               `Questions? Contact support.`
           }
@@ -1302,38 +1381,47 @@ export default {
       try {
         const result = await getMonthlyStats()
         const data = result.data || result
-
-        this.monthlySent = data.sent || 0
-        this.monthlyLimit = data.limit || 50000
-        this.monthlyRemaining = data.remaining || 50000
+        this.monthlySent = Number(data.sent || 0)
+        this.monthlyLimit = Number(data.limit || 100000)
+        this.monthlyRemaining = Number(data.remaining ?? this.monthlyLimit)
+        this.cycleActive = Boolean(data.active)
+        this.usageCycle = data.cycle || null
+        this.usageCycleHistory = data.history || []
       } catch (err) {
-        console.error('Failed to load monthly stats:', err)
-        this.calculateLocalMonthlyStats()
+        console.error('Failed to load 30-day usage stats:', err)
+        // Do not estimate usage from campaigns: provider acceptance is authoritative.
       }
     },
 
-    calculateLocalMonthlyStats() {
-      const now = new Date()
-      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-      let sentThisMonth = 0
-      this.recentCampaigns.forEach((campaign) => {
-        const createdAt = campaign.createdAt
-        if (!createdAt) return
-
-        let date
-        if (createdAt.toDate) date = createdAt.toDate()
-        else if (createdAt.seconds) date = new Date(createdAt.seconds * 1000)
-        else date = new Date(createdAt)
-
-        const campaignMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        if (campaignMonthKey === currentMonthKey) {
-          sentThisMonth += campaign.stats?.sent || campaign.totalEmails || 0
-        }
-      })
-
-      this.monthlySent = sentThisMonth
-      this.monthlyRemaining = Math.max(0, this.monthlyLimit - sentThisMonth)
+    async activateCycle(restart) {
+      if (
+        restart &&
+        !window.confirm(
+          'Restart the active cycle now? The current cycle will be closed and retained in history, and a fresh 100,000-email / 30-day allowance will begin.',
+        )
+      )
+        return
+      if (
+        !restart &&
+        !window.confirm('Activate a new 30-day cycle with a 100,000-email allowance?')
+      )
+        return
+      this.cycleActionLoading = true
+      try {
+        const result = await activateUsageCycle({ restart })
+        const data = result.data || result
+        if (!data.success) throw new Error(data.message || 'Cycle activation failed.')
+        await this.loadMonthlyStats()
+        this.messageType = 'success'
+        this.messageTitle = restart ? 'Cycle Restarted' : 'Cycle Activated'
+        this.message = 'Your new 30-day sending allowance is active.'
+      } catch (err) {
+        this.messageType = 'error'
+        this.messageTitle = 'Unable to Activate Cycle'
+        this.message = err.message || 'Please try again.'
+      } finally {
+        this.cycleActionLoading = false
+      }
     },
   },
 }
